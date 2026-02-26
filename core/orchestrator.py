@@ -201,19 +201,22 @@ class Orchestrator:
                 sub_name = sub_cfg.get("name", "")
                 if not sub_name:
                     continue
-                existing = self.hub_manager.get_hub(sub_name)
-                if not existing:
-                    self.hub_manager.register_hub(
-                        subreddit=sub_name,
-                        project=proj_name,
-                        created_by="config_sync",
-                        description=sub_cfg.get("title", ""),
-                        niche=sub_cfg.get("niche", ""),
-                    )
-                    count += 1
+                # Build alt_names as JSON string for DB storage
+                alt_list = sub_cfg.get("alt_names", [])
+                alt_names_str = json.dumps(alt_list) if alt_list else ""
+                self.hub_manager.register_hub(
+                    subreddit=sub_name,
+                    project=proj_name,
+                    created_by="config_sync",
+                    description=sub_cfg.get("title", ""),
+                    niche=sub_cfg.get("niche", ""),
+                    account=sub_cfg.get("account", ""),
+                    alt_names=alt_names_str,
+                )
+                count += 1
         all_hubs = self.hub_manager.get_hubs()
         if all_hubs:
-            logger.info(f"Synced {len(all_hubs)} owned subreddits as hubs ({count} new)")
+            logger.info(f"Synced {len(all_hubs)} owned subreddits as hubs ({count} synced)")
 
     def _on_projects_reloaded(self, projects: List[Dict]):
         """Called when project files change on disk."""
@@ -2608,7 +2611,18 @@ class Orchestrator:
             hubs = self.hub_manager.get_hubs(proj_name)
 
             for hub in hubs[:max_subs]:
-                account = self.account_mgr.get_next_account("reddit")
+                # Use the assigned account if specified in YAML config
+                assigned_username = hub.get("account", "")
+                if assigned_username:
+                    account = self.account_mgr.get_account_by_username("reddit", assigned_username)
+                    if not account:
+                        logger.warning(
+                            f"Assigned account {assigned_username} unavailable for r/{hub['subreddit']} "
+                            f"— falling back to round-robin"
+                        )
+                        account = self.account_mgr.get_next_account("reddit")
+                else:
+                    account = self.account_mgr.get_next_account("reddit")
                 if not account:
                     continue
                 bot = self._get_reddit_bot(account)
@@ -2626,12 +2640,22 @@ class Orchestrator:
                         )
                         title = sub_cfg.get("title", f"r/{sub_name}")
                         desc = sub_cfg.get("niche", project.get("project", {}).get("description", ""))
+                        # Parse alt_names from hub DB (JSON string) or YAML config
+                        alt_names = []
+                        if hub.get("alt_names"):
+                            try:
+                                alt_names = json.loads(hub["alt_names"])
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+                        if not alt_names:
+                            alt_names = sub_cfg.get("alt_names", [])
                         created = self.hub_manager.create_subreddit(
                             bot, sub_name, title, desc, proj_name,
+                            alt_names=alt_names,
                         )
                         if created:
                             stats["created"] += 1
-                            logger.info(f"Subreddit r/{sub_name} created/confirmed for {proj_name}")
+                            logger.info(f"Subreddit created/confirmed for {proj_name}")
                         else:
                             logger.warning(f"Could not create/confirm r/{sub_name} — will retry next cycle")
                             continue  # Skip setup if we can't create it

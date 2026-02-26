@@ -272,6 +272,22 @@ class AccountManager:
 
         return best
 
+    def get_account_by_username(self, platform: str, username: str) -> Optional[Dict]:
+        """Get a specific account by username (if healthy and not on cooldown)."""
+        accounts = self.load_accounts(platform)
+        for acc in accounts:
+            if acc.get("username") == username:
+                key = f"{platform}:{username}"
+                status = self._statuses.get(key, self.HEALTHY)
+                if status == self.BANNED:
+                    logger.warning(f"Account {username} is banned — skipping")
+                    return None
+                if key in self._cooldowns and datetime.now() < self._cooldowns[key]:
+                    logger.warning(f"Account {username} is on cooldown — skipping")
+                    return None
+                return acc
+        return None
+
     def mark_cooldown(
         self,
         platform: str,

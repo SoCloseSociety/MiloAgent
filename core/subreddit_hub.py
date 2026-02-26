@@ -57,6 +57,8 @@ class SubredditHubManager:
                         last_post_at TEXT,
                         status TEXT DEFAULT 'active',
                         setup_complete INTEGER DEFAULT 0,
+                        account TEXT,
+                        alt_names TEXT,
                         sidebar_text TEXT,
                         rules TEXT,
                         metadata TEXT
@@ -65,14 +67,19 @@ class SubredditHubManager:
                     CREATE INDEX IF NOT EXISTS idx_hubs_project ON subreddit_hubs(project);
                     CREATE INDEX IF NOT EXISTS idx_hubs_status ON subreddit_hubs(status);
                 """)
-                # Migration: add setup_complete column to existing tables
-                try:
-                    self.db.conn.execute(
-                        "ALTER TABLE subreddit_hubs ADD COLUMN setup_complete INTEGER DEFAULT 0"
-                    )
-                    logger.info("Migrated subreddit_hubs: added setup_complete column")
-                except Exception:
-                    pass  # Column already exists
+                # Migrations: add columns to existing tables
+                for col, typedef in [
+                    ("setup_complete", "INTEGER DEFAULT 0"),
+                    ("account", "TEXT"),
+                    ("alt_names", "TEXT"),
+                ]:
+                    try:
+                        self.db.conn.execute(
+                            f"ALTER TABLE subreddit_hubs ADD COLUMN {col} {typedef}"
+                        )
+                        logger.info(f"Migrated subreddit_hubs: added {col} column")
+                    except Exception:
+                        pass  # Column already exists
         except Exception as e:
             logger.debug(f"Hub table creation: {e}")
 
@@ -85,25 +92,29 @@ class SubredditHubManager:
         created_by: str,
         description: str = "",
         niche: str = "",
+        account: str = "",
+        alt_names: str = "",
     ) -> bool:
         """Register an owned subreddit as a hub (safe upsert, preserves stats)."""
         try:
             # Insert only if new — never overwrite existing stats/setup_complete
             self.db._execute_write(
                 """INSERT OR IGNORE INTO subreddit_hubs
-                   (subreddit, project, created_by, description, niche)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (subreddit, project, created_by, description, niche),
+                   (subreddit, project, created_by, description, niche, account, alt_names)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (subreddit, project, created_by, description, niche, account, alt_names),
             )
             # Always update created_by + description (e.g. config_sync → real username)
             self.db._execute_write(
                 """UPDATE subreddit_hubs
                    SET created_by = ?, description = COALESCE(NULLIF(?, ''), description),
-                       niche = COALESCE(NULLIF(?, ''), niche)
+                       niche = COALESCE(NULLIF(?, ''), niche),
+                       account = COALESCE(NULLIF(?, ''), account),
+                       alt_names = COALESCE(NULLIF(?, ''), alt_names)
                    WHERE subreddit = ?""",
-                (created_by, description, niche, subreddit),
+                (created_by, description, niche, account, alt_names, subreddit),
             )
-            logger.info(f"Registered hub r/{subreddit} for {project}")
+            logger.info(f"Registered hub r/{subreddit} for {project} (account={account or 'any'})")
             return True
         except Exception as e:
             logger.error(f"Failed to register hub: {e}")
@@ -138,25 +149,12 @@ class SubredditHubManager:
 
     # ── Subreddit Creation ──────────────────────────────────────────
 
-    def create_subreddit(self, reddit_bot, name: str, title: str,
-                          description: str, project: str) -> bool:
-        """Create a new subreddit via Reddit web API.
+    def _try_create_subreddit(self, reddit_bot, name: str, title: str,
+                               description: str) -> tuple:
+        """Attempt to create a single subreddit. Returns (success, error_code).
 
-        Note: Reddit requires accounts to be 30+ days old with some karma
-        to create subreddits.
+        error_code is one of: None (success), 'EXISTS', 'BAD_NAME', 'CAPTCHA', 'HTTP_ERROR', 'UNKNOWN'
         """
-        if not hasattr(reddit_bot, '_ensure_auth'):
-            logger.error("Reddit bot doesn't support subreddit creation")
-            return False
-
-        if not reddit_bot._ensure_auth():
-            logger.error("Not authenticated")
-            return False
-
-        if not reddit_bot._modhash:
-            logger.error("No modhash — cannot create subreddit")
-            return False
-
         try:
             time.sleep(random.uniform(5, 15))
 
@@ -186,34 +184,105 @@ class SubredditHubManager:
                 result = resp.json()
                 errors = result.get("json", {}).get("errors", [])
                 if not errors:
-                    logger.info(f"Created subreddit r/{name}")
-                    self.register_hub(
-                        name, project, reddit_bot._username,
-                        description=description,
-                    )
-                    # Trigger community setup if manager is available
-                    if self._community_manager:
-                        logger.info(f"Triggering setup pipeline for r/{name}")
-                        # setup will run in the next community management cycle
-                    return True
-                else:
-                    logger.error(f"Subreddit creation errors: {errors}")
-                    # If subreddit already exists, register it
-                    for err in errors:
-                        if "already exists" in str(err).lower():
-                            logger.info(f"r/{name} already exists — registering as hub")
-                            self.register_hub(
-                                name, project, reddit_bot._username,
-                                description=description,
-                            )
-                            return True
+                    return True, None
+                error_str = str(errors).lower()
+                if "already exists" in error_str or "subreddit_exists" in error_str:
+                    return False, "EXISTS"
+                if "bad_sr_name" in error_str:
+                    return False, "BAD_NAME"
+                if "bad_captcha" in error_str:
+                    return False, "CAPTCHA"
+                logger.error(f"Subreddit creation errors for r/{name}: {errors}")
+                return False, "UNKNOWN"
             else:
-                logger.error(f"Subreddit creation HTTP {resp.status_code}")
+                logger.error(f"Subreddit creation HTTP {resp.status_code} for r/{name}")
+                return False, "HTTP_ERROR"
 
         except Exception as e:
-            logger.error(f"Failed to create subreddit: {e}")
+            logger.error(f"Failed to create subreddit r/{name}: {e}")
+            return False, "UNKNOWN"
 
+    def create_subreddit(self, reddit_bot, name: str, title: str,
+                          description: str, project: str,
+                          alt_names: list = None) -> bool:
+        """Create a new subreddit via Reddit web API, with alt_names fallback.
+
+        If the primary name fails (EXISTS/BAD_NAME), tries alternative names.
+        On CAPTCHA errors, stops immediately (Reddit anti-bot, retry next cycle).
+        """
+        if not hasattr(reddit_bot, '_ensure_auth'):
+            logger.error("Reddit bot doesn't support subreddit creation")
+            return False
+
+        if not reddit_bot._ensure_auth():
+            logger.error("Not authenticated")
+            return False
+
+        if not reddit_bot._modhash:
+            logger.error("No modhash — cannot create subreddit")
+            return False
+
+        # Build the list of names to try: primary first, then alternates
+        names_to_try = [name] + (alt_names or [])
+
+        for candidate in names_to_try:
+            # Validate name length (Reddit max = 21 chars)
+            if len(candidate) > 21:
+                logger.warning(f"r/{candidate} too long ({len(candidate)} chars > 21) — skipping")
+                continue
+
+            logger.info(f"Attempting to create r/{candidate} (project={project})...")
+            success, error_code = self._try_create_subreddit(
+                reddit_bot, candidate, title, description,
+            )
+
+            if success:
+                logger.info(f"Created subreddit r/{candidate}")
+                # If we used an alt name, update the hub in DB
+                if candidate != name:
+                    logger.info(f"Alt name used: r/{candidate} (original was r/{name})")
+                    self._rename_hub(name, candidate)
+                self.register_hub(
+                    candidate, project, reddit_bot._username,
+                    description=description,
+                )
+                return True
+
+            if error_code == "EXISTS":
+                # Check if WE own it (created_by is our username)
+                existing = self.get_hub(candidate)
+                if existing and existing.get("created_by") == reddit_bot._username:
+                    logger.info(f"r/{candidate} already exists and is ours — confirming")
+                    return True
+                logger.warning(f"r/{candidate} already exists (not ours) — trying next name")
+                continue
+
+            if error_code == "BAD_NAME":
+                logger.warning(f"r/{candidate} rejected (bad name) — trying next name")
+                continue
+
+            if error_code == "CAPTCHA":
+                logger.warning(f"CAPTCHA required for r/{candidate} — will retry next cycle")
+                return False  # Don't try more names, captcha blocks everything
+
+            # HTTP_ERROR or UNKNOWN — stop trying
+            logger.warning(f"r/{candidate} failed ({error_code}) — will retry next cycle")
+            return False
+
+        logger.error(f"All name candidates exhausted for project {project}: {names_to_try}")
         return False
+
+    def _rename_hub(self, old_name: str, new_name: str):
+        """Rename a hub entry in DB when an alt_name was used instead of primary."""
+        try:
+            existing = self.get_hub(old_name)
+            if existing:
+                self.db._execute_write(
+                    "DELETE FROM subreddit_hubs WHERE subreddit = ?", (old_name,),
+                )
+                logger.info(f"Removed old hub entry r/{old_name} (replaced by r/{new_name})")
+        except Exception as e:
+            logger.error(f"Failed to rename hub {old_name} → {new_name}: {e}")
 
     # ── Hub Content Generation ──────────────────────────────────────
 
