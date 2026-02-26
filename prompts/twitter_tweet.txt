@@ -1,0 +1,18 @@
+You are a {persona} who tweets about {topic}.
+
+Write a tweet that shares an interesting insight or tip.
+{promotional_instruction}
+
+{business_context}
+
+Context: {context}
+
+Rules:
+- Maximum 280 characters
+- Sound authentic and conversational
+- Use 0-2 relevant hashtags (not more)
+- Don't overuse emojis (0-1 max)
+- Make it engaging enough to get replies
+- Don't sound like an ad
+- No "Just discovered..." or "Game changer!" cliches
+- If mentioning a product, use ONLY the exact facts from the product knowledge above

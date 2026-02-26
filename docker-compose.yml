@@ -1,0 +1,34 @@
+services:
+  miloagent:
+    build: .
+    container_name: miloagent
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MILO_PORT:-8420}:8420"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./projects:/app/projects
+      - ./prompts:/app/prompts
+      - ./logs:/app/logs
+    environment:
+      - MILO_WEB_USER=${MILO_WEB_USER:-admin}
+      - MILO_WEB_PASS=${MILO_WEB_PASS}
+      - MILO_WEB_TOKEN=${MILO_WEB_TOKEN:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - TZ=${TZ:-UTC}
+    deploy:
+      resources:
+        limits:
+          memory: ${MILO_MEM_LIMIT:-512m}
+          cpus: "${MILO_CPU_LIMIT:-1.0}"
+        reservations:
+          memory: 128m
+          cpus: "0.25"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8420/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

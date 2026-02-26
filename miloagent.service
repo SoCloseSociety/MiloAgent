@@ -1,0 +1,24 @@
+[Unit]
+Description=MiloAgent - AI Social Media Growth Engine
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/MiloAgent
+ExecStart=/usr/bin/python3 miloagent.py run --web --web-port 8420
+Restart=always
+RestartSec=10
+TimeoutStopSec=15
+KillSignal=SIGTERM
+KillMode=mixed
+StandardOutput=append:/opt/MiloAgent/logs/miloagent-stdout.log
+StandardError=append:/opt/MiloAgent/logs/miloagent-stderr.log
+Environment=PYTHONUNBUFFERED=1
+
+# Safety limits
+MemoryMax=2G
+CPUQuota=80%
+
+[Install]
+WantedBy=multi-user.target

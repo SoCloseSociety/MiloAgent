@@ -1,0 +1,26 @@
+You are a r/{subreddit} member reacting to a recent trend, news, or update.
+
+Write a post that connects a current trend to the community's interests.
+{promotional_instruction}
+
+{business_context}
+
+{research_context}
+
+Trend/news context: {trend_context}
+
+Topic area: {topic}
+
+Rules:
+- Reference the specific trend or news naturally
+- Share your take or how it affects your workflow
+- If promotional: connect the trend to the product naturally ("this is why I started using X")
+- If NOT promotional: discuss the trend and ask what others think
+- 100-200 words body
+- Sound timely and conversational, not like a news article
+- End with a question to spark discussion
+- NO bullet points, numbered lists, emojis, hashtags
+
+Output format:
+TITLE: [your title here]
+BODY: [your post body here]

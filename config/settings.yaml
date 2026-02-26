@@ -1,0 +1,143 @@
+bot:
+  name: "Milo"
+  version: "3.0"
+  mode: "auto"                 # auto | background | full | server
+                               # auto = macOS→full, Linux server/Docker→server
+  cost_mode: "zero"            # zero | standard
+  active_hours: [4, 24]        # Bot active window (24h format)
+  scan_interval_minutes: 8     # Scan frequency
+  action_interval_minutes: 1   # Min interval between actions (accounts rotate)
+  max_actions_per_hour: 30     # Total across all accounts
+  organic_promo_ratio: 0.70    # 70% organic, 30% promotional
+  log_level: "INFO"
+
+scheduling:
+  background:
+    scan_interval_minutes: 20
+    action_interval_minutes: 6
+    max_actions_per_hour: 10
+    active_hours: [8, 23]
+  full:
+    scan_interval_minutes: 10
+    action_interval_minutes: 2
+    max_actions_per_hour: 24
+    active_hours: [5, 24]
+  server:
+    scan_interval_minutes: 6
+    action_interval_minutes: 1
+    max_actions_per_hour: 35
+    active_hours: [4, 24]
+
+# Project priorities — adjust weights to control which project gets more attention
+# Keys must match your project filenames in projects/ (without .yaml)
+priorities:
+  my_project: 1.0
+
+features:
+  telegram_dashboard: true
+  auto_organic_posts: true
+  scan_and_respond: true
+  seed_questions: true
+  content_validation: true
+  auto_learn: true
+  subreddit_intel: true
+  community_presence: true
+  research_engine: true
+  ab_testing: true
+  subreddit_hubs: true
+  auto_improve: true
+
+subreddit_intel:
+  interval_hours: 8
+  max_per_cycle: 15
+  opportunity_threshold: 5.5
+  stale_hours: 16
+
+community_presence:
+  interval_hours: 4
+  max_engagement_per_cycle: 8
+  neglected_hours: 36
+
+research:
+  interval_hours: 8
+  max_trending_topics: 5
+  knowledge_ttl_hours:
+    trend: 48
+    news: 72
+    fact: 720
+    talking_point: 168
+
+database:
+  path: "data/miloagent.db"
+  max_size_mb: 200
+  retention_days: 30
+
+process:
+  nice_priority: 10
+  pid_file: "data/miloagent.pid"
+
+resources:
+  monitor_interval_seconds: 30
+  max_process_rss_mb: 350
+  ram_warn_percent: 88
+  ram_critical_percent: 94
+  disk_warn_percent: 90
+  disk_critical_percent: 95
+
+resources_server:
+  max_process_rss_mb: 400
+  ram_warn_percent: 80
+  ram_critical_percent: 90
+  disk_warn_percent: 85
+  disk_critical_percent: 95
+
+user_posts:
+  enabled: true
+  max_per_day: 3
+  min_gap_hours: 8
+  base_probability: 0.35
+  cross_platform_share: false
+  post_types:
+    discovery: true
+    question: true
+    comparison: true
+    experience: true
+    tutorial: true
+    tip: true
+    before_after: true
+    trend_react: true
+
+scan_limits:
+  max_subreddits_per_scan: 20
+  max_keywords_per_subreddit: 10
+  max_http_requests_per_scan: 90
+  scan_timeout_seconds: 180
+  startup_delay_seconds: 30
+
+community_management:
+  enabled: true
+  interval_hours: 4
+  max_subs_per_cycle: 5
+  auto_moderate: true
+  sticky_refresh_days: 7
+  creation:
+    max_per_week: 1
+    min_account_age_days: 30
+    min_karma: 50
+  takeover:
+    enabled: true
+    scan_interval_hours: 24
+    min_takeover_score: 7.0
+    max_requests_per_month: 2
+    min_account_age_days: 90
+    min_karma: 300
+    dormancy_threshold_days: 60
+  automod:
+    allow_own_domains: true
+    block_spam_links: true
+    block_low_karma_links: true
+
+http:
+  proxy: null
+  twitter_proxy: null
+  reddit_proxy: null

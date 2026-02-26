@@ -1,0 +1,19 @@
+# =============================================================================
+# Telegram User Account Configuration (Telethon)
+# =============================================================================
+# For engaging in Telegram groups as a real user.
+# Setup: https://my.telegram.org/apps → create app → get api_id & api_hash
+# =============================================================================
+
+accounts:
+  - phone: "+1234567890"
+    api_id: "YOUR_API_ID"
+    api_hash: "YOUR_API_HASH"
+    session_file: "data/sessions/telegram_user1.session"
+    enabled: false
+    persona: "auto"
+    assigned_projects: ["my_project"]
+    cooldown_minutes: 15
+    max_messages_per_hour: 8
+    target_groups:
+      - "auto"

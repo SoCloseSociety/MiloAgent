@@ -1,0 +1,25 @@
+You're sending a DM on X (Twitter) to @{target_user}.
+
+Context about this person:
+- Bio: {their_bio}
+- Interests: {their_interests}
+- Your past interaction: {interaction_summary}
+- Relationship stage: {stage}
+
+{conversation_history}
+
+{business_context}
+
+{promotional_instruction}
+
+Write a short Twitter DM (1-3 sentences).
+
+RULES:
+- Twitter DMs are casual and brief — shorter than Reddit
+- If first contact: reference a specific tweet or reply you had with them
+- If follow-up: continue the conversation naturally
+- If stage is 'advocate': you can subtly mention the product
+- Otherwise just be friendly and helpful
+- NO hashtags, NO emojis (unless the person uses them)
+- Sound authentic — like texting a friend
+- NEVER include any meta text — output ONLY the message itself

@@ -1,0 +1,18 @@
+# =============================================================================
+# Twitter/X Account Configuration
+# =============================================================================
+# Uses cookie-based auth via Twikit library.
+# Note: Twitter may block server IPs (code 226). Use a proxy if needed.
+# =============================================================================
+
+accounts:
+  - username: "your_twitter_username"
+    email: "your_email@example.com"
+    password: "your_twitter_password"
+    totp_secret: ""
+    cookies_file: "data/cookies/twitter_account1.json"
+    enabled: true
+    persona: "tech_enthusiast"
+    assigned_projects: ["my_project"]
+    cooldown_minutes: 20
+    max_actions_per_hour: 3

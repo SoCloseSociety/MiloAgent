@@ -1,0 +1,63 @@
+# =============================================================================
+# MiloAgent — Git Ignore
+# =============================================================================
+
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# ── Virtual Environment ───────────────────────────────────
+venv/
+.venv/
+env/
+
+# ── IDE ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# ── Runtime Data (NEVER commit these) ────────────────────
+data/miloagent.db
+data/miloagent.db-shm
+data/miloagent.db-wal
+data/*.pid
+data/cookies/*.json
+data/sessions/*.session
+data/sessions/*.session-journal
+data/curator_cache/
+*.db-shm
+*.db-wal
+*.db-journal
+
+# ── Session & Cookie Files (contain auth tokens) ─────────
+*.session
+*.session-journal
+
+# ── Logs ──────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Environment Variables (contain secrets) ───────────────
+.env
+.env.local
+
+# ── OS ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Backups ───────────────────────────────────────────────
+backups/
+
+# ── Docker ────────────────────────────────────────────────
+.dockerignore
+
+# ── Test artifacts ────────────────────────────────────────
+.pytest_cache/
+test_*.db*

@@ -1,0 +1,36 @@
+# =============================================================================
+# Reddit Account Configuration
+# =============================================================================
+# Auth modes:
+#   "web"  = Cookie-based (recommended — no API app needed)
+#   "api"  = PRAW/OAuth (needs client_id/client_secret)
+# =============================================================================
+
+auth_mode: "web"
+
+accounts:
+  - username: "your_reddit_username"
+    password: "your_reddit_password"
+    client_id: ""
+    client_secret: ""
+    user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+    cookies_file: "data/cookies/reddit_account1.json"
+    enabled: true
+    persona: "content_creator"
+    assigned_projects: ["my_project"]
+    cooldown_minutes: 10
+    max_actions_per_hour: 5
+
+  # - username: "second_account"
+  #   password: "password"
+  #   client_id: ""
+  #   client_secret: ""
+  #   user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+  #   cookies_file: "data/cookies/reddit_account2.json"
+  #   enabled: true
+  #   persona: "helpful_casual"
+  #   assigned_projects: ["my_project"]
+  #   cooldown_minutes: 10
+  #   max_actions_per_hour: 5
+
+default_cooldown_per_subreddit_minutes: 25

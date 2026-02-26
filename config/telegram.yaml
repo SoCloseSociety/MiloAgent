@@ -1,0 +1,17 @@
+# =============================================================================
+# Telegram Bot Configuration (for monitoring dashboard)
+# =============================================================================
+# Setup:
+#   1. Talk to @BotFather on Telegram → /newbot → get bot token
+#   2. Get your chat ID: send /start to @userinfobot
+# =============================================================================
+
+bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+admin_chat_ids:
+  - 000000000                               # Your Telegram user ID
+
+notifications:
+  daily_report: true
+  daily_report_hour: 22
+  alert_on_error: true
+  alert_on_captcha: true

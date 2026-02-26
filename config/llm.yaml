@@ -1,0 +1,51 @@
+# =============================================================================
+# LLM Provider Configuration
+# =============================================================================
+# MiloAgent uses a fallback chain: if the primary provider fails, it tries the next.
+# All providers use OpenAI-compatible APIs.
+#
+# COST: $0/month using Groq + Gemini free tiers
+# =============================================================================
+
+providers:
+  groq:
+    enabled: true
+    priority: 1
+    base_url: "https://api.groq.com/openai/v1"
+    api_key: "YOUR_GROQ_API_KEY"           # Get free key at https://console.groq.com
+    model: "llama-3.3-70b-versatile"        # Free tier: 30 req/min, 6000 req/day
+    max_tokens: 1024
+    temperature: 0.7
+
+  gemini:
+    enabled: true
+    priority: 2
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: "YOUR_GEMINI_API_KEY"         # Get free key at https://aistudio.google.com/apikey
+    model: "gemini-2.0-flash"               # Free tier: 15 req/min, 1500 req/day
+    max_tokens: 1024
+    temperature: 0.7
+
+  ollama:
+    enabled: false                          # Enable if you have Ollama running locally
+    priority: 3
+    base_url: "http://localhost:11434/v1"
+    api_key: "ollama"
+    model: "llama3.2:3b"
+    max_tokens: 1024
+    temperature: 0.7
+
+  claude:
+    enabled: false
+    priority: 4
+    base_url: "https://api.anthropic.com/v1"
+    api_key: "YOUR_ANTHROPIC_API_KEY"
+    model: "claude-sonnet-4-5-20250929"
+    max_tokens: 1024
+    temperature: 0.7
+
+fallback_chain: ["groq", "gemini", "ollama"]
+
+routing:
+  creative: ["groq", "gemini", "ollama"]
+  analytical: ["ollama", "groq", "gemini"]

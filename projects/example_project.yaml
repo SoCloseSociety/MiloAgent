@@ -1,0 +1,159 @@
+# =============================================================================
+# Example Project Configuration — MiloAgent
+# =============================================================================
+# Each project represents a product/service you want to promote organically.
+# Copy this file and rename it to match your project.
+#
+# Usage:
+#   cp projects/example_project.yaml projects/my_saas.yaml
+#   # Edit my_saas.yaml with your product details
+#   python3 miloagent.py business list   # Verify it's loaded
+#
+# Hot-reload: Changes are detected automatically — no restart needed.
+# =============================================================================
+
+project:
+  name: "MyProduct"
+  url: "https://myproduct.com"
+  type: "SaaS"                              # SaaS | App | Tool | Service | Community
+  description: "Brief description of what your product does and who it's for."
+  tagline: "Your catchy one-liner"
+  weight: 1.0                               # Priority weight (higher = more attention)
+  enabled: true
+
+  selling_points:
+    - "Key feature or benefit #1"
+    - "Key feature or benefit #2"
+    - "Key feature or benefit #3"
+
+  target_audiences:
+    - developers
+    - startups
+    - small_business
+
+  business_profile:
+    socials:
+      twitter: ""
+      website: "https://myproduct.com"
+      youtube: ""
+      tiktok: ""
+      discord: ""
+
+    features:
+      - name: "Feature One"
+        description: "What this feature does for the user"
+      - name: "Feature Two"
+        description: "What this feature does for the user"
+
+    pricing:
+      model: "freemium"                     # freemium | paid | free | open_source
+      free_tier: "Basic plan with limited usage"
+      paid_plans:
+        - name: "Pro"
+          price: "$19/month"
+          highlights: "Unlimited usage, priority support, advanced features"
+
+    faqs:
+      - q: "What does MyProduct do?"
+        a: "It helps you with X by doing Y"
+      - q: "Is there a free plan?"
+        a: "Yes, with basic features included"
+      - q: "What platforms are supported?"
+        a: "Web, iOS, and Android"
+
+    competitors:
+      - name: "Competitor A"
+        differentiation: "MyProduct is more affordable and easier to use"
+        trigger_keywords: ["competitor a", "competitora"]
+      - name: "Competitor B"
+        differentiation: "MyProduct has better integration with X"
+        trigger_keywords: ["competitor b"]
+
+    rules:
+      never_say:
+        - "MyProduct is completely free"        # misleading if freemium
+        - "MyProduct is the best"               # avoid superlatives
+      always_accurate:
+        - "Product name is exactly 'MyProduct'"
+        - "URL is myproduct.com"
+        - "Free tier includes basic features"
+
+# =============================================================================
+# Reddit Targeting
+# =============================================================================
+reddit:
+  target_subreddits:
+    primary:
+      - "SaaS"
+      - "startups"
+      - "Entrepreneur"
+      - "smallbusiness"
+    secondary:
+      - "webdev"
+      - "programming"
+      - "productivity"
+
+  keywords:
+    - "how to automate"
+    - "best tool for"
+    - "looking for a solution"
+    - "recommendation for"
+    - "alternative to competitor"
+
+  exclude_keywords:
+    - "irrelevant term 1"
+    - "irrelevant term 2"
+
+  comment_style: "helpful_casual"
+  min_post_score: 1
+  max_post_age_hours: 48
+
+  owned_subreddits: []
+    # - name: "MyProductCommunity"
+    #   title: "MyProduct Community & Tips"
+    #   niche: "productivity, automation, tools"
+
+  allowed_domains:
+    - "myproduct.com"
+
+# =============================================================================
+# Twitter/X Targeting
+# =============================================================================
+twitter:
+  keywords:
+    - "looking for tool"
+    - "need automation"
+    - "productivity hack"
+
+  hashtags:
+    - "#ProductivityTools"
+    - "#SaaS"
+    - "#Startup"
+
+  tweet_style: "enthusiastic_brief"
+
+# =============================================================================
+# Telegram Targeting
+# =============================================================================
+telegram:
+  enabled: false
+  persona: "auto"
+  target_groups:
+    - "auto"
+  auto_discover: true
+  max_groups_per_scan: 8
+  keywords:
+    - "productivity"
+    - "automation"
+    - "tools"
+  exclude_keywords: []
+  max_message_age_minutes: 120
+  message_style: "helpful_casual"
+
+# =============================================================================
+# Tone & Language
+# =============================================================================
+tone:
+  style: "helpful_casual"                   # helpful_casual | professional | enthusiastic_brief
+  language: "en"                            # en | fr | es | de | ...
+  formality: "casual"                       # casual | semi_formal | formal

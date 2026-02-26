@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiloAgent — Mission Control</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#05080f;--bg2:#0b1120;--bg3:#111827;--bg4:#1a2332;
+  --border:#1e2d3d;--border2:#2a3a4d;
+  --text:#e2e8f0;--text2:#64748b;--text3:#475569;
+  --green:#22c55e;--red:#ef4444;--blue:#3b82f6;--yellow:#eab308;
+  --purple:#a855f7;--cyan:#06b6d4;--orange:#f97316;--pink:#ec4899;
+  --glow-blue:rgba(59,130,246,.15);--glow-green:rgba(34,197,94,.15);--glow-purple:rgba(168,85,247,.15);
+  --glass:rgba(11,17,32,.8);
+}
+body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.5;overflow-x:hidden}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--border2)}
+
+/* ── Animated background ── */
+body::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at 20% 50%,rgba(59,130,246,.03) 0%,transparent 50%),radial-gradient(ellipse at 80% 20%,rgba(168,85,247,.03) 0%,transparent 50%),radial-gradient(ellipse at 50% 80%,rgba(6,182,212,.02) 0%,transparent 50%);pointer-events:none;z-index:0}
+
+/* ── Login ── */
+.login-page{min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;z-index:1}
+.login-box{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:48px 40px;width:420px;text-align:center;backdrop-filter:blur(20px);box-shadow:0 0 60px rgba(59,130,246,.08)}
+.login-box .logo{font-size:28px;font-weight:800;letter-spacing:-.5px;margin-bottom:2px;background:linear-gradient(135deg,var(--cyan),var(--blue),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.login-box .logo-sub{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:3px;margin-bottom:32px}
+.login-box .field{position:relative;margin-bottom:12px}
+.login-box input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:13px 16px;color:var(--text);font-size:14px;transition:all .2s}
+.login-box input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--glow-blue)}
+.login-box input::placeholder{color:var(--text3)}
+.login-box .error-msg{color:var(--red);font-size:12px;margin-bottom:10px;min-height:18px}
+.login-box .btn-login{width:100%;padding:13px;border:none;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.3px}
+.login-box .btn-login:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 20px rgba(59,130,246,.3)}
+.login-box .btn-login:disabled{opacity:.3;cursor:not-allowed;transform:none}
+.toggle-vis{position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text2);cursor:pointer;font-size:12px}
+
+/* ── Dashboard Shell ── */
+.dashboard{display:none;position:relative;z-index:1}
+
+/* ── Mission Control Header ── */
+.mc-header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+.mc-left{display:flex;align-items:center;gap:16px}
+.mc-logo{font-size:18px;font-weight:800;letter-spacing:-.3px;background:linear-gradient(135deg,var(--cyan),var(--blue),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.mc-badge{font-size:10px;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:2px 8px;letter-spacing:.5px}
+.mc-right{display:flex;align-items:center;gap:16px}
+
+/* Status Orb */
+.status-orb{width:10px;height:10px;border-radius:50%;position:relative}
+.status-orb.live{background:var(--green);box-shadow:0 0 12px var(--green);animation:orb-pulse 2s infinite}
+.status-orb.paused{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
+.status-orb.stopped{background:var(--red);box-shadow:0 0 8px var(--red)}
+@keyframes orb-pulse{0%,100%{box-shadow:0 0 12px var(--green)}50%{box-shadow:0 0 24px var(--green),0 0 48px rgba(34,197,94,.2)}}
+.mc-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+.mc-uptime{font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums}
+
+/* ── Metrics Ribbon ── */
+.metrics-ribbon{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 24px;display:flex;gap:24px;overflow-x:auto}
+.metric-pill{display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}
+.metric-pill .mv{font-weight:700;font-variant-numeric:tabular-nums}
+.metric-pill .ml{color:var(--text2);font-size:11px}
+
+/* ── Tabs ── */
+.nav-tabs{display:flex;gap:0;background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20px;overflow-x:auto}
+.nav-tab{padding:11px 20px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;text-transform:uppercase;letter-spacing:.5px}
+.nav-tab:hover{color:var(--text)}
+.nav-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.nav-tab .tab-icon{margin-right:6px;font-size:14px}
+.tab-content{display:none;padding:20px 24px;max-width:1600px;margin:0 auto}
+.tab-content.active{display:block}
+
+/* ── Cards (Glass morphism) ── */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:1200px){.grid3,.grid4{grid-template-columns:1fr 1fr}}
+@media(max-width:768px){.grid,.grid3,.grid4{grid-template-columns:1fr}}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px;overflow:hidden;position:relative;transition:border-color .2s}
+.card:hover{border-color:var(--border2)}
+.card.full{grid-column:1/-1}
+.card.span3{grid-column:span 3}
+.card h2{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card h2 .badge-count{font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:1px 8px;color:var(--text2);font-weight:600}
+.card h2 .card-icon{font-size:14px;opacity:.6}
+
+/* Glow cards */
+.card.glow-blue{border-color:rgba(59,130,246,.2);box-shadow:inset 0 0 30px rgba(59,130,246,.03)}
+.card.glow-green{border-color:rgba(34,197,94,.2);box-shadow:inset 0 0 30px rgba(34,197,94,.03)}
+.card.glow-purple{border-color:rgba(168,85,247,.2);box-shadow:inset 0 0 30px rgba(168,85,247,.03)}
+.card.glow-cyan{border-color:rgba(6,182,212,.2);box-shadow:inset 0 0 30px rgba(6,182,212,.03)}
+
+/* ── Stat Boxes ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.stat-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;transition:all .2s}
+.stat-card:hover{border-color:var(--border2);transform:translateY(-1px)}
+.stat-card .sv{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.2}
+.stat-card .sl{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.stat-card.blue .sv{color:var(--blue)}
+.stat-card.green .sv{color:var(--green)}
+.stat-card.red .sv{color:var(--red)}
+.stat-card.yellow .sv{color:var(--yellow)}
+.stat-card.purple .sv{color:var(--purple)}
+.stat-card.cyan .sv{color:var(--cyan)}
+.stat-card.orange .sv{color:var(--orange)}
+
+/* ── Minimap ── */
+.minimap-row{display:flex;align-items:center;padding:6px 0;border-bottom:1px solid rgba(30,45,61,.5);font-size:12px;gap:8px}
+.minimap-row:last-child{border-bottom:none}
+.minimap-name{min-width:140px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.minimap-bar{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.minimap-bar .fill{height:100%;border-radius:2px;transition:width .5s}
+.minimap-count{min-width:28px;text-align:right;font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
+.minimap-stage{font-size:10px;text-transform:uppercase;letter-spacing:.5px;min-width:70px;text-align:right}
+
+/* ── Feed ── */
+.feed{max-height:400px;overflow-y:auto;scrollbar-width:thin}
+.feed-item{padding:7px 0;border-bottom:1px solid rgba(30,45,61,.5);font-size:12px;display:flex;gap:8px;align-items:center}
+.feed-item:last-child{border-bottom:none}
+.feed-item .time{color:var(--text3);white-space:nowrap;min-width:45px;font-size:11px;font-variant-numeric:tabular-nums}
+.feed-item .type{min-width:60px;font-weight:600;font-size:11px;text-transform:uppercase}
+.feed-item .msg{color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Chat Feed ── */
+.chat-feed{max-height:500px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding:4px 0}
+.chat-msg{display:flex;gap:8px;align-items:flex-start;font-size:12px}
+.chat-msg .cat-badge{font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;min-width:42px;text-align:center;flex-shrink:0;text-transform:uppercase;letter-spacing:.5px}
+.chat-msg .cat-badge.SCAN{background:rgba(59,130,246,.12);color:var(--blue)}
+.chat-msg .cat-badge.ACT{background:rgba(34,197,94,.12);color:var(--green)}
+.chat-msg .cat-badge.LEARN{background:rgba(168,85,247,.12);color:var(--purple)}
+.chat-msg .cat-badge.TG{background:rgba(6,182,212,.12);color:var(--cyan)}
+.chat-msg .cat-badge.ERR{background:rgba(239,68,68,.12);color:var(--red)}
+.chat-msg .cat-badge.REL{background:rgba(249,115,22,.12);color:var(--orange)}
+.chat-msg .cat-badge.ENG{background:rgba(234,179,8,.12);color:var(--yellow)}
+.chat-msg .cat-badge.RES{background:rgba(168,85,247,.08);color:var(--purple)}
+.chat-msg .cat-badge.PRES{background:rgba(6,182,212,.08);color:var(--cyan)}
+.chat-msg .cat-badge.HUB{background:rgba(236,72,153,.12);color:var(--pink)}
+.chat-msg .cat-badge.MOD{background:rgba(249,115,22,.12);color:var(--orange)}
+.chat-msg .chat-ts{color:var(--text3);font-size:10px;min-width:45px;padding-top:2px;font-variant-numeric:tabular-nums}
+.chat-msg .chat-text{flex:1;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;line-height:1.4;font-size:12px}
+
+/* ── DM list ── */
+.dm-item{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid rgba(30,45,61,.5);font-size:12px;align-items:flex-start}
+.dm-item .dm-dir{font-size:14px;min-width:20px}
+.dm-item .dm-user{font-weight:700;min-width:100px;color:var(--cyan)}
+.dm-item .dm-content{flex:1;color:var(--text2)}
+.dm-item .dm-time{color:var(--text3);font-size:10px;min-width:40px;text-align:right}
+
+/* ── Schedule ── */
+.sched-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(30,45,61,.5);font-size:12px}
+.sched-row:last-child{border-bottom:none}
+.sched-row .sched-name{color:var(--text)}
+.sched-row .countdown{color:var(--green);font-variant-numeric:tabular-nums;min-width:55px;text-align:right;font-weight:600}
+.sched-row .interval{color:var(--text3);min-width:40px;text-align:right;margin-left:6px;font-size:11px}
+
+/* ── Brain ── */
+.brain-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(30,45,61,.5);font-size:12px}
+.brain-row:last-child{border-bottom:none}
+.brain-row .label{color:var(--text2);min-width:120px}
+.brain-row .value{text-align:right;flex:1;font-weight:500}
+
+/* ── Performance ── */
+.perf-grade{font-size:56px;font-weight:900;text-align:center;margin:8px 0;line-height:1}
+.perf-bar-label{display:flex;justify-content:space-between;font-size:11px;margin-top:8px}
+.perf-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin:3px 0}
+.perf-bar .fill{height:100%;border-radius:3px;transition:width .5s}
+.perf-improvements{margin-top:10px;font-size:11px;color:var(--yellow)}
+
+/* ── Entity Cards ── */
+.entity-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;transition:border-color .15s}
+.entity-card:hover{border-color:var(--border2)}
+.entity-card .name{font-weight:700;font-size:13px}
+.entity-card .meta{font-size:11px;color:var(--text2);margin-top:2px}
+.entity-card .actions-area{display:flex;align-items:center;gap:8px}
+.badge{font-size:10px;padding:2px 10px;border-radius:8px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.badge.healthy,.badge.on{background:rgba(34,197,94,.12);color:var(--green)}
+.badge.warning,.badge.cooldown{background:rgba(234,179,8,.12);color:var(--yellow)}
+.badge.error,.badge.off{background:rgba(239,68,68,.12);color:var(--red)}
+.hp-bar{display:flex;gap:1px}
+.hp-bar span{width:8px;height:14px;border-radius:2px;background:var(--border)}
+.hp-bar span.filled{background:var(--green)}
+.hp-bar.cooldown span.filled{background:var(--yellow)}
+.hp-bar.warned span.filled{background:var(--red)}
+.hp-bar.banned span.filled{background:var(--red)}
+
+/* ── Buttons ── */
+.btn{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;letter-spacing:.2px}
+.btn:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(6,182,212,.05)}
+.btn.primary{background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.3);color:var(--blue)}
+.btn.primary:hover{background:rgba(59,130,246,.15);border-color:var(--blue)}
+.btn.danger{border-color:rgba(239,68,68,.3);color:var(--red)}
+.btn.danger:hover{background:rgba(239,68,68,.08);border-color:var(--red)}
+.btn.success{border-color:rgba(34,197,94,.3);color:var(--green)}
+.btn.success:hover{background:rgba(34,197,94,.08)}
+.btn:disabled{opacity:.3;cursor:not-allowed}
+.btn-sm{padding:5px 12px;font-size:11px}
+.controls-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* ── Charts ── */
+.chart-wrap{position:relative;height:220px}
+
+/* ── Progress bars ── */
+.res-bar{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12px}
+.res-bar .bar-label{min-width:50px;font-weight:600;font-size:11px}
+.res-bar .bar-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.res-bar .bar-fill{height:100%;border-radius:3px;transition:width .5s}
+.res-bar .bar-pct{min-width:42px;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ── Insight bars ── */
+.insight-bar{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12px}
+.insight-bar .bar{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.insight-bar .bar .fill{height:100%;border-radius:3px;background:var(--blue)}
+.insight-tag{display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 10px;margin:2px;font-size:11px;font-weight:500}
+
+/* ── Community cards ── */
+.community-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;transition:border-color .15s}
+.community-card:hover{border-color:var(--border2)}
+.community-card .comm-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.community-card .comm-name{font-weight:700;font-size:14px;color:var(--orange)}
+.community-card .comm-project{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.community-card .comm-stats{display:flex;gap:16px;font-size:11px;color:var(--text2)}
+.community-card .comm-stats span{display:flex;align-items:center;gap:4px}
+.comm-setup-bar{height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden}
+.comm-setup-bar .fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--cyan),var(--blue));transition:width .5s}
+
+/* ── Modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.show{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px;width:520px;max-width:92vw;max-height:85vh;overflow-y:auto}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:20px}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.form-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:13px;transition:all .2s}
+.form-input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px var(--glow-blue)}
+select.form-input{cursor:pointer}
+.form-row{display:flex;gap:12px}
+.form-row .form-group{flex:1}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:24px}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 24px;font-size:13px;font-weight:500;z-index:300;transform:translateY(80px);opacity:0;transition:all .3s;backdrop-filter:blur(12px)}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{border-color:var(--green);color:var(--green)}
+.toast.error{border-color:var(--red);color:var(--red)}
+
+/* ── Emergency Banner ── */
+.emergency-banner{display:none;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px 20px;margin:16px 24px 0;font-size:13px;color:var(--red);text-align:center;font-weight:700;letter-spacing:.3px}
+.emergency-banner.show{display:flex;align-items:center;justify-content:center;gap:12px}
+
+/* ── No data ── */
+.no-data{color:var(--text3);font-style:italic;font-size:12px;padding:12px 0}
+
+/* ── Section headers ── */
+.section-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+
+/* ── Account Performance Grid ── */
+.acct-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.acct-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;transition:border-color .15s}
+.acct-card:hover{border-color:var(--border2)}
+.acct-card .acct-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.acct-card .acct-name{font-weight:700;font-size:14px}
+.acct-card .acct-persona{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.acct-card .acct-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
+.acct-card .acct-stat{text-align:center;padding:4px 0}
+.acct-card .acct-stat .asv{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+.acct-card .acct-stat .asl{font-size:9px;color:var(--text3);text-transform:uppercase}
+.acct-card .acct-meta{font-size:11px;color:var(--text2);display:flex;flex-wrap:wrap;gap:8px}
+.acct-card .acct-subs{font-size:10px;color:var(--text3);margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}
+.acct-card .acct-subs span{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:1px 6px}
+.acct-card.no-session{border-color:rgba(239,68,68,.3)}
+.acct-card.no-session .acct-name{color:var(--red)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ LOGIN ═══════════════════ -->
+<div id="loginPage" class="login-page">
+  <div class="login-box">
+    <div class="logo">MILOAGENT</div>
+    <div class="logo-sub">Mission Control</div>
+    <div class="field">
+      <input id="loginUser" type="text" placeholder="Username" autocomplete="username">
+    </div>
+    <div class="field">
+      <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password">
+      <button class="toggle-vis" onclick="toggleVis()" type="button">show</button>
+    </div>
+    <div id="loginError" class="error-msg"></div>
+    <button id="btnLogin" class="btn-login" onclick="doLogin()">Launch Control</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ DASHBOARD ═══════════════════ -->
+<div id="dashboardPage" class="dashboard">
+
+  <!-- Mission Control Header -->
+  <div class="mc-header">
+    <div class="mc-left">
+      <span class="mc-logo">MILOAGENT</span>
+      <span class="mc-badge" id="mcVersion">v3.0</span>
+      <span class="mc-badge" id="mcMode">server</span>
+    </div>
+    <div class="mc-right">
+      <div class="mc-status">
+        <span class="status-orb stopped" id="statusOrb"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+      <span class="mc-uptime" id="uptime"></span>
+      <button class="btn btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- Live Metrics Ribbon -->
+  <div class="metrics-ribbon" id="metricsRibbon">
+    <div class="metric-pill"><span class="mv" id="mrActions" style="color:var(--green)">0</span><span class="ml">Actions/24h</span></div>
+    <div class="metric-pill"><span class="mv" id="mrReddit" style="color:var(--orange)">0</span><span class="ml">Reddit</span></div>
+    <div class="metric-pill"><span class="mv" id="mrTelegram" style="color:var(--cyan)">0</span><span class="ml">Telegram</span></div>
+    <div class="metric-pill"><span class="mv" id="mrOpps" style="color:var(--yellow)">0</span><span class="ml">Opportunities</span></div>
+    <div class="metric-pill"><span class="mv" id="mrAccounts" style="color:var(--blue)">0</span><span class="ml">Accounts</span></div>
+    <div class="metric-pill"><span class="mv" id="mrHubs" style="color:var(--pink)">0</span><span class="ml">Communities</span></div>
+    <div class="metric-pill"><span class="mv" id="mrCPU" style="color:var(--text)">-</span><span class="ml">CPU</span></div>
+    <div class="metric-pill"><span class="mv" id="mrRAM" style="color:var(--text)">-</span><span class="ml">RAM</span></div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <div class="nav-tabs">
+    <div class="nav-tab active" data-tab="command" onclick="switchTab('command')"><span class="tab-icon">&#9678;</span>Command</div>
+    <div class="nav-tab" data-tab="activity" onclick="switchTab('activity')"><span class="tab-icon">&#9632;</span>Activity</div>
+    <div class="nav-tab" data-tab="intel" onclick="switchTab('intel')"><span class="tab-icon">&#9733;</span>Intelligence</div>
+    <div class="nav-tab" data-tab="communities" onclick="switchTab('communities')"><span class="tab-icon">&#9673;</span>Communities</div>
+    <div class="nav-tab" data-tab="manage" onclick="switchTab('manage')"><span class="tab-icon">&#9881;</span>Accounts</div>
+    <div class="nav-tab" data-tab="server" onclick="switchTab('server')"><span class="tab-icon">&#9652;</span>Server</div>
+  </div>
+
+  <!-- Emergency Banner -->
+  <div id="emergencyBanner" class="emergency-banner">
+    <span>EMERGENCY STOP ACTIVE — All operations frozen</span>
+    <button class="btn btn-sm success" onclick="emergencyReset()">Reset</button>
+  </div>
+
+  <!-- ═══════ TAB: Command Center ═══════ -->
+  <div id="tab-command" class="tab-content active">
+    <div class="stat-grid" id="statsRow"></div>
+    <div class="grid">
+      <!-- Actions Chart -->
+      <div class="card glow-blue">
+        <h2><span class="card-icon">&#9679;</span> Actions by Type (24h)</h2>
+        <div class="chart-wrap"><canvas id="chartActions"></canvas></div>
+      </div>
+      <!-- Timeline Chart -->
+      <div class="card glow-purple">
+        <h2><span class="card-icon">&#9679;</span> Activity Timeline (7d)</h2>
+        <div class="chart-wrap"><canvas id="chartTimeline"></canvas></div>
+      </div>
+      <!-- Reddit Minimap -->
+      <div class="card glow-green">
+        <h2>Reddit Map <span class="badge-count" id="redditCount">0</span></h2>
+        <div id="redditMap" style="max-height:320px;overflow-y:auto"></div>
+      </div>
+      <!-- Telegram Summary -->
+      <div class="card glow-cyan">
+        <h2>Telegram Activity <span class="badge-count" id="telegramCount">0</span></h2>
+        <div id="telegramPanel" style="max-height:320px;overflow-y:auto"></div>
+      </div>
+      <!-- Agent Controls -->
+      <div class="card">
+        <h2>Agent Controls</h2>
+        <div class="controls-grid">
+          <button class="btn primary" onclick="doControl('scan')">Scan Now</button>
+          <button class="btn primary" onclick="doControl('act')">Act Now</button>
+          <button class="btn primary" onclick="doControl('learn')">Learn</button>
+          <button class="btn primary" onclick="doControl('engage')">Engage</button>
+        </div>
+        <div class="controls-grid" style="margin-top:8px">
+          <button class="btn" onclick="doControl('auto-improve')">Auto-Improve</button>
+          <button class="btn" onclick="doControl('reload-config')">Reload Config</button>
+          <button class="btn success" id="btnResume" onclick="doControl('resume')" disabled>Resume</button>
+          <button class="btn danger" id="btnPause" onclick="doControl('pause')">Pause</button>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="doControl('cleanup')" style="flex:1">Cleanup DB</button>
+          <button id="btnEmergency" class="btn btn-sm danger" onclick="emergencyStop()" style="flex:1;font-weight:800;letter-spacing:.5px">EMERGENCY STOP</button>
+        </div>
+      </div>
+      <!-- Schedule -->
+      <div class="card">
+        <h2>Scheduled Jobs</h2>
+        <div id="scheduleList" style="max-height:280px;overflow-y:auto"></div>
+      </div>
+      <!-- Per-Account Reddit Performance -->
+      <div class="card full glow-purple">
+        <h2>Reddit Account Performance <span class="badge-count" id="redditAcctCount">0</span></h2>
+        <div id="redditAcctPerf"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: Activity ═══════ -->
+  <div id="tab-activity" class="tab-content">
+    <div class="grid">
+      <div class="card full glow-blue">
+        <h2>Live Agent Feed</h2>
+        <div id="chatFeed" class="chat-feed"></div>
+      </div>
+      <div class="card">
+        <h2>Recent Actions</h2>
+        <div id="actionsFeed" class="feed"></div>
+      </div>
+      <div class="card">
+        <h2>Conversations & DMs</h2>
+        <div id="dmList" style="max-height:300px;overflow-y:auto"></div>
+        <div class="section-label" style="margin-top:14px">Telegram Alerts</div>
+        <div id="alertList" style="max-height:200px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: Intelligence ═══════ -->
+  <div id="tab-intel" class="tab-content">
+    <div class="grid">
+      <div class="card glow-green">
+        <h2>Performance Score</h2>
+        <div id="perfPanel"></div>
+      </div>
+      <div class="card glow-purple">
+        <h2>Agent Brain</h2>
+        <div id="brainPanel"></div>
+      </div>
+      <div class="card glow-blue">
+        <h2>Intelligence Insights</h2>
+        <div id="insightsPanel"></div>
+      </div>
+      <div class="card glow-cyan">
+        <h2>Top Opportunities</h2>
+        <div id="oppsList" class="feed" style="max-height:380px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: Communities ═══════ -->
+  <div id="tab-communities" class="tab-content">
+    <div class="stat-grid" id="commStats"></div>
+    <div class="grid">
+      <div class="card full glow-purple">
+        <h2>Managed Communities <span class="badge-count" id="commCount">0</span></h2>
+        <div id="commList"></div>
+      </div>
+      <div class="card glow-cyan">
+        <h2>Takeover Targets</h2>
+        <div id="takeoverTargets" class="feed" style="max-height:350px"></div>
+      </div>
+      <div class="card glow-blue">
+        <h2>Takeover Requests</h2>
+        <div id="takeoverRequests" class="feed" style="max-height:350px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: Accounts & Projects ═══════ -->
+  <div id="tab-manage" class="tab-content">
+    <div class="grid">
+      <div class="card">
+        <h2>Projects <button class="btn btn-sm primary" onclick="openModal('addProject')">+ Add</button></h2>
+        <div id="projectsManage"></div>
+      </div>
+      <div class="card">
+        <h2>Accounts <button class="btn btn-sm primary" onclick="openModal('addAccount')">+ Add</button></h2>
+        <div id="accountsManage"></div>
+      </div>
+      <div class="card full">
+        <h2>Cookie Sessions <button class="btn btn-sm primary" onclick="openModal('pasteCookies')">Paste Cookies</button></h2>
+        <div id="cookiesStatus"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: Server ═══════ -->
+  <div id="tab-server" class="tab-content">
+    <div class="stat-grid" id="serverStats"></div>
+    <div id="serverBars" style="margin-bottom:16px"></div>
+    <div class="grid">
+      <div class="card glow-blue">
+        <h2>Resource History</h2>
+        <div class="chart-wrap"><canvas id="chartResources"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>All Scheduled Jobs</h2>
+        <div id="scheduleListFull" style="max-height:400px;overflow-y:auto"></div>
+      </div>
+      <div class="card full">
+        <h2>Live Logs <span class="badge-count" id="logCount">0</span></h2>
+        <div id="logsPanel" class="feed" style="max-height:350px;font-family:'JetBrains Mono','SF Mono',Consolas,monospace;font-size:11px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODALS ═══════ -->
+
+<!-- Add Project Modal -->
+<div id="modal-addProject" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3>Add New Project</h3>
+    <div class="form-row">
+      <div class="form-group"><label>Name *</label><input class="form-input" id="pName"></div>
+      <div class="form-group"><label>Type</label>
+        <select class="form-input" id="pType"><option>SaaS</option><option>E-commerce</option><option>App</option><option>Service</option><option>Other</option></select>
+      </div>
+    </div>
+    <div class="form-group"><label>URL *</label><input class="form-input" id="pUrl" placeholder="https://..."></div>
+    <div class="form-group"><label>Description *</label><input class="form-input" id="pDesc"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Tagline</label><input class="form-input" id="pTagline"></div>
+      <div class="form-group"><label>Weight</label><input class="form-input" id="pWeight" type="number" step="0.1" value="1.0"></div>
+    </div>
+    <div class="form-group"><label>Selling Points (comma-sep)</label><input class="form-input" id="pSelling"></div>
+    <div class="form-group"><label>Target Audiences (comma-sep)</label><input class="form-input" id="pAudiences"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="submitProject()">Create Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Project Modal -->
+<div id="modal-editProject" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3>Edit Project: <span id="editProjName"></span></h3>
+    <div class="form-row">
+      <div class="form-group"><label>Enabled</label>
+        <select class="form-input" id="epEnabled"><option value="true">Yes</option><option value="false">No</option></select>
+      </div>
+      <div class="form-group"><label>Weight</label><input class="form-input" id="epWeight" type="number" step="0.1"></div>
+    </div>
+    <div class="form-group"><label>URL</label><input class="form-input" id="epUrl"></div>
+    <div class="form-group"><label>Description</label><input class="form-input" id="epDesc"></div>
+    <div class="form-group"><label>Tagline</label><input class="form-input" id="epTagline"></div>
+    <div class="form-group"><label>Tone Style</label>
+      <select class="form-input" id="epTone"><option>helpful_casual</option><option>expert</option><option>friendly</option><option>neutral</option></select>
+    </div>
+    <div class="form-group"><label>Reddit Primary Subreddits (comma-sep)</label><input class="form-input" id="epSubsPrimary"></div>
+    <div class="form-group"><label>Reddit Secondary Subreddits (comma-sep)</label><input class="form-input" id="epSubsSecondary"></div>
+    <div class="form-group"><label>Reddit Keywords (comma-sep)</label><input class="form-input" id="epRedditKw"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="submitEditProject()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Account Modal -->
+<div id="modal-addAccount" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3>Add New Account</h3>
+    <div class="form-row">
+      <div class="form-group"><label>Platform *</label>
+        <select class="form-input" id="aPlat"><option value="reddit">Reddit</option><option value="telegram">Telegram</option></select>
+      </div>
+      <div class="form-group"><label>Username *</label><input class="form-input" id="aUser"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Password *</label><input class="form-input" id="aPass" type="password"></div>
+      <div class="form-group"><label>Email</label><input class="form-input" id="aEmail"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Persona</label>
+        <select class="form-input" id="aPersona"><option>helpful_casual</option><option>tech_expert</option><option>friendly_newbie</option><option>industry_insider</option></select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="submitAccount()">Add Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- Paste Cookies Modal -->
+<div id="modal-pasteCookies" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3>Paste Cookies from Browser</h3>
+    <p style="color:var(--text2);font-size:12px;margin-bottom:14px">
+      Open your browser (logged in) → F12 → Console → <code style="color:var(--cyan)">document.cookie</code> → paste below
+    </p>
+    <div class="form-row">
+      <div class="form-group"><label>Platform *</label>
+        <select class="form-input" id="cookiePlat" onchange="loadCookieAccounts()"><option value="reddit">Reddit</option></select>
+      </div>
+      <div class="form-group"><label>Account *</label>
+        <select class="form-input" id="cookieAccount"></select>
+      </div>
+    </div>
+    <div class="form-group"><label>Cookies (document.cookie output) *</label>
+      <textarea class="form-input" id="cookieRaw" rows="5" placeholder="name=value; name2=value2; ..." style="font-family:'JetBrains Mono',monospace;font-size:11px;resize:vertical"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="submitPasteCookies()">Save Cookies</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// MiloAgent Mission Control — Dashboard v3.0
+// ══════════════════════════════════════════════════════════════
+
+let TOKEN = localStorage.getItem('milo_token') || '';
+let paused = false;
+let currentTab = 'command';
+let charts = {};
+let ws = null;
+let refreshTimer = null;
+let loginAttempts = 0;
+let loginLockUntil = 0;
+let _editingProject = '';
+let _logCount = 0;
+
+// ── Toast ────────────────────────────────────────────────
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + (type||'') + ' show';
+  setTimeout(() => el.className = 'toast', 3500);
+}
+
+// ── Login ────────────────────────────────────────────────
+function toggleVis() {
+  const inp = document.getElementById('loginPass');
+  const btn = inp.nextElementSibling;
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'hide'; }
+  else { inp.type = 'password'; btn.textContent = 'show'; }
+}
+
+async function doLogin() {
+  const now = Date.now();
+  const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('btnLogin');
+  if (now < loginLockUntil) { errEl.textContent = `Too many attempts. Wait ${Math.ceil((loginLockUntil-now)/1000)}s`; return; }
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value.trim();
+  if (!user || !pass) { errEl.textContent = 'Username and password required'; return; }
+  btn.disabled = true; btn.textContent = 'Connecting...'; errEl.textContent = '';
+  try {
+    const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:user,password:pass}) });
+    const data = await r.json();
+    if (r.ok && data.ok) { TOKEN=data.token; localStorage.setItem('milo_token',TOKEN); loginAttempts=0; showDashboard(); }
+    else { loginAttempts++; if(loginAttempts>=5){loginLockUntil=Date.now()+30000;errEl.textContent='Too many attempts. Locked 30s'}else errEl.textContent=data.detail||'Invalid credentials'; }
+  } catch(e) { errEl.textContent = 'Connection failed'; }
+  btn.disabled = false; btn.textContent = 'Launch Control';
+}
+
+function showDashboard() { document.getElementById('loginPage').style.display='none'; document.getElementById('dashboardPage').style.display='block'; startDashboard(); }
+function showLogin() { document.getElementById('loginPage').style.display='flex'; document.getElementById('dashboardPage').style.display='none'; document.getElementById('loginError').textContent=''; }
+function logout() { TOKEN=''; localStorage.removeItem('milo_token'); if(ws){ws.close();ws=null} if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null} charts={}; showLogin(); }
+
+document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('loginUser').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('loginPass').focus(); });
+
+// ── Tab Navigation ───────────────────────────────────────
+function switchTab(name) {
+  currentTab = name;
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id==='tab-'+name));
+  refresh();
+}
+
+// ── API Helpers ──────────────────────────────────────────
+async function api(path) {
+  const r = await fetch(path, {headers:{'Authorization':'Bearer '+TOKEN}});
+  if (r.status===401) { logout(); throw new Error('Unauthorized'); }
+  return r.json();
+}
+async function apiPost(path, body) {
+  const opts = {method:'POST', headers:{'Authorization':'Bearer '+TOKEN}};
+  if (body) { opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
+  const r = await fetch(path, opts);
+  if (r.status===401) { logout(); throw new Error('Unauthorized'); }
+  return r.json();
+}
+async function apiPut(path, body) {
+  const r = await fetch(path, {method:'PUT', headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  if (r.status===401) { logout(); throw new Error('Unauthorized'); }
+  return r.json();
+}
+async function apiDelete(path) {
+  const r = await fetch(path, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
+  if (r.status===401) { logout(); throw new Error('Unauthorized'); }
+  return r.json();
+}
+
+// ── Helpers ──────────────────────────────────────────────
+function esc(s) { if(!s) return ''; const d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
+function fmtUp(s) { if(s<3600)return Math.floor(s/60)+'m'; if(s<86400)return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m'; return Math.floor(s/86400)+'d '+Math.floor((s%86400)/3600)+'h'; }
+function fmtCD(s) { if(s<0)return'paused'; if(s<60)return s+'s'; if(s<3600)return Math.floor(s/60)+'m'; return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m'; }
+function resBar(label, pct, warn, crit) {
+  const color = pct>=crit?'var(--red)':pct>=warn?'var(--yellow)':'var(--green)';
+  return `<div class="res-bar"><span class="bar-label">${label}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,pct)}%;background:${color}"></div></div><span class="bar-pct" style="color:${color}">${pct}%</span></div>`;
+}
+function hpBar(status) {
+  const map={healthy:5,cooldown:3,warned:2,banned:0};
+  const filled=map[status]??0;
+  let h=`<div class="hp-bar ${status}">`;
+  for(let i=0;i<5;i++) h+=`<span class="${i<filled?'filled':''}"></span>`;
+  return h+'</div>';
+}
+function splitCSV(s) { return s ? s.split(',').map(x=>x.trim()).filter(Boolean) : []; }
+
+// ── Render: Status ───────────────────────────────────────
+function renderStatus(d) {
+  paused = d.paused;
+  const orb = document.getElementById('statusOrb');
+  const txt = document.getElementById('statusText');
+  orb.className = 'status-orb '+(d.emergency_stopped?'stopped':paused?'paused':'live');
+  txt.textContent = d.emergency_stopped?'STOPPED':paused?'Paused':'Running';
+  txt.style.color = d.emergency_stopped?'var(--red)':paused?'var(--yellow)':'var(--green)';
+  document.getElementById('mcMode').textContent = d.mode||'auto';
+  document.getElementById('uptime').textContent = fmtUp(d.uptime_seconds);
+  document.getElementById('mcVersion').textContent = 'v'+(d.version||'3.0');
+  document.getElementById('btnPause').disabled = paused;
+  document.getElementById('btnResume').disabled = !paused;
+  const eb = document.getElementById('emergencyBanner');
+  eb.classList.toggle('show', !!d.emergency_stopped);
+  document.getElementById('btnEmergency').disabled = !!d.emergency_stopped;
+}
+
+// ── Render: Stats + Metrics Ribbon ───────────────────────
+function renderStats(d) {
+  if (d.error) return;
+  const total = d.total_actions||0;
+  const byPlat = d.by_platform||{};
+  const opps = d.opportunities||{};
+
+  // Metrics ribbon
+  document.getElementById('mrActions').textContent = total;
+  document.getElementById('mrReddit').textContent = byPlat.reddit||0;
+  document.getElementById('mrTelegram').textContent = byPlat.telegram||0;
+  document.getElementById('mrOpps').textContent = opps.pending||0;
+
+  // Stat cards
+  const row = document.getElementById('statsRow');
+  let h = `<div class="stat-card green"><div class="sv">${total}</div><div class="sl">Total Actions 24h</div></div>`;
+  if (byPlat.reddit!==undefined) h += `<div class="stat-card orange"><div class="sv">${byPlat.reddit}</div><div class="sl">Reddit</div></div>`;
+  if (byPlat.telegram!==undefined) h += `<div class="stat-card cyan"><div class="sv">${byPlat.telegram}</div><div class="sl">Telegram</div></div>`;
+  if (opps.pending) h += `<div class="stat-card yellow"><div class="sv">${opps.pending}</div><div class="sl">Opportunities</div></div>`;
+  if (opps.acted) h += `<div class="stat-card blue"><div class="sv">${opps.acted||0}</div><div class="sl">Acted</div></div>`;
+  const byType = d.by_type||{};
+  if (byType.comment) h += `<div class="stat-card purple"><div class="sv">${byType.comment}</div><div class="sl">Comments</div></div>`;
+  if (byType.post||byType.seed_post) h += `<div class="stat-card orange"><div class="sv">${(byType.post||0)+(byType.seed_post||0)}</div><div class="sl">Posts</div></div>`;
+  row.innerHTML = h;
+
+  // Bar chart
+  const labels = Object.keys(byType);
+  const values = Object.values(byType);
+  if (charts.actions) { charts.actions.data.labels=labels; charts.actions.data.datasets[0].data=values; charts.actions.update(); }
+  else if (labels.length) {
+    charts.actions = new Chart(document.getElementById('chartActions').getContext('2d'), {
+      type:'doughnut', data:{labels, datasets:[{data:values,backgroundColor:['#3b82f6','#22c55e','#a855f7','#eab308','#ef4444','#06b6d4','#f97316','#ec4899'],borderWidth:0,hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'right',labels:{color:'#64748b',font:{size:11},padding:8,usePointStyle:true,pointStyleWidth:8}}}}
+    });
+  }
+}
+
+// ── Render: Timeline ─────────────────────────────────────
+function renderTimeline(d) {
+  if (d.error || !d.hourly) return;
+  const last72 = d.hourly.slice(-72);
+  const labels = last72.map(h => { const p=h.hour.split('T'); return p[1]||p[0]; });
+  const reddit = last72.map(h => h.reddit||0);
+  const telegram = last72.map(h => h.telegram||0);
+  if (charts.timeline) {
+    charts.timeline.data.labels=labels;
+    charts.timeline.data.datasets[0].data=reddit;
+    charts.timeline.data.datasets[1].data=telegram;
+    charts.timeline.update();
+  } else {
+    charts.timeline = new Chart(document.getElementById('chartTimeline').getContext('2d'), {
+      type:'line', data:{labels, datasets:[
+        {label:'Reddit',data:reddit,borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.08)',fill:true,tension:.4,pointRadius:0,borderWidth:2},
+        {label:'Telegram',data:telegram,borderColor:'#06b6d4',backgroundColor:'rgba(6,182,212,.08)',fill:true,tension:.4,pointRadius:0,borderWidth:2}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#64748b',font:{size:11},usePointStyle:true,pointStyleWidth:8}}},scales:{x:{ticks:{color:'#475569',font:{size:10},maxTicksLimit:12},grid:{color:'rgba(30,45,61,.5)'}},y:{ticks:{color:'#475569'},grid:{color:'rgba(30,45,61,.5)'},beginAtZero:true}}}
+    });
+  }
+}
+
+// ── Render: Reddit Minimap ───────────────────────────────
+function renderMinimaps(d) {
+  const rm = document.getElementById('redditMap');
+  const reddit = d.reddit||[];
+  document.getElementById('redditCount').textContent = reddit.length;
+  if (!reddit.length) { rm.innerHTML='<p class="no-data">No subreddit data yet</p>'; }
+  else {
+    const maxAct = Math.max(...reddit.map(s=>s.count_24h||1));
+    rm.innerHTML = reddit.map(s => {
+      const stageColor = {new:'var(--text2)',warming:'var(--yellow)',established:'var(--green)',trusted:'var(--cyan)'}[s.stage]||'var(--text2)';
+      const pct = Math.round((s.count_24h||0)/maxAct*100);
+      return `<div class="minimap-row"><span class="minimap-name" style="color:var(--orange)">r/${esc(s.subreddit)}</span><div class="minimap-bar"><div class="fill" style="width:${pct}%;background:var(--orange)"></div></div><span class="minimap-count">${s.count_24h}</span><span class="minimap-stage" style="color:${stageColor}">${esc(s.stage)}</span></div>`;
+    }).join('');
+  }
+
+  // Telegram panel — show group activity from conversations
+  const tm = document.getElementById('telegramPanel');
+  const tgData = d.telegram||{};
+  const tgGroups = tgData.groups||tgData.by_type||[];
+  const tgCount = Array.isArray(tgGroups) ? tgGroups.length : 0;
+  document.getElementById('telegramCount').textContent = tgCount;
+  if (!tgCount) { tm.innerHTML='<p class="no-data">No Telegram activity yet</p>'; }
+  else {
+    tm.innerHTML = tgGroups.map(g => {
+      const name = g.name||g.type||g.group||'Unknown';
+      const count = g.count||g.messages||0;
+      return `<div class="minimap-row"><span class="minimap-name" style="color:var(--cyan)">${esc(name)}</span><div class="minimap-bar"><div class="fill" style="width:${Math.min(100,count*10)}%;background:var(--cyan)"></div></div><span class="minimap-count">${count}</span></div>`;
+    }).join('');
+  }
+}
+
+// ── Render: Reddit Account Performance ───────────────────
+function renderRedditAcctPerf(d) {
+  const el = document.getElementById('redditAcctPerf');
+  const countEl = document.getElementById('redditAcctCount');
+  if (!d||!d.length) { el.innerHTML='<p class="no-data">No Reddit accounts</p>'; countEl.textContent='0'; return; }
+  countEl.textContent = d.length;
+
+  el.innerHTML = '<div class="acct-grid">' + d.map(a => {
+    const sessionClass = a.has_reddit_session ? '' : ' no-session';
+    const statusBadge = a.status==='healthy' ? '<span class="badge healthy">Healthy</span>' :
+      a.status==='cooldown' ? `<span class="badge cooldown">CD ${a.cooldown_remaining}s</span>` :
+      `<span class="badge error">${esc(a.status)}</span>`;
+    const sessionWarning = !a.has_reddit_session ? '<span style="color:var(--red);font-size:10px">NO SESSION</span>' : '';
+    const successColor = a.success_rate>=0.9?'var(--green)':a.success_rate>=0.7?'var(--yellow)':'var(--red)';
+
+    let subsHtml = '';
+    if (a.subreddits_active&&a.subreddits_active.length) {
+      subsHtml = '<div class="acct-subs">' + a.subreddits_active.slice(0,8).map(s => `<span>r/${esc(s)}</span>`).join('') +
+        (a.subreddits_active.length>8?`<span>+${a.subreddits_active.length-8}</span>`:'') + '</div>';
+    }
+
+    return `<div class="acct-card${sessionClass}">
+      <div class="acct-header">
+        <div>
+          <span class="acct-name">@${esc(a.username)}</span>
+          <span class="acct-persona">${esc(a.persona)}</span>
+          ${sessionWarning}
+        </div>
+        ${statusBadge}
+      </div>
+      <div class="acct-stats">
+        <div class="acct-stat"><div class="asv" style="color:var(--green)">${a.total_24h}</div><div class="asl">24h</div></div>
+        <div class="acct-stat"><div class="asv" style="color:var(--blue)">${a.comments}</div><div class="asl">Comments</div></div>
+        <div class="acct-stat"><div class="asv" style="color:var(--purple)">${a.posts}</div><div class="asl">Posts</div></div>
+        <div class="acct-stat"><div class="asv" style="color:${successColor}">${Math.round(a.success_rate*100)}%</div><div class="asl">Success</div></div>
+      </div>
+      <div class="acct-meta">
+        <span>Upvotes: ${a.upvotes||0}</span>
+        <span>Subs joined: ${a.subscribes||0}</span>
+        <span>Active in: ${a.subreddits_count} subs</span>
+        <span>4h window: ${a.total_4h} actions</span>
+        ${a.cookie_age_hours!==null?`<span>Cookie: ${a.cookie_age_hours}h old</span>`:''}
+      </div>
+      ${subsHtml}
+    </div>`;
+  }).join('') + '</div>';
+}
+
+// ── Render: Schedule ─────────────────────────────────────
+function renderSchedule(d, elId) {
+  const el = document.getElementById(elId);
+  if (!d||!d.length) { el.innerHTML='<p class="no-data">No scheduled jobs</p>'; return; }
+  el.innerHTML = d.map(j => `<div class="sched-row"><span class="sched-name">${esc(j.name)}</span><div><span class="countdown">${fmtCD(j.seconds_until)}</span><span class="interval">${esc(j.interval||'')}</span></div></div>`).join('');
+}
+
+// ── Render: Actions Feed ─────────────────────────────────
+function renderActions(d) {
+  const el = document.getElementById('actionsFeed');
+  if (d.error||!d||!d.length) { el.innerHTML='<p class="no-data">No recent actions</p>'; return; }
+  el.innerHTML = d.slice(0,50).map(a => {
+    const t=a.created_at||a.timestamp||''; const time=t?t.split(' ').pop().substring(0,5):'';
+    const typeColor = {comment:'var(--green)',post:'var(--blue)',seed_post:'var(--purple)',like:'var(--yellow)',reply:'var(--cyan)'}[a.action_type]||'var(--text2)';
+    return `<div class="feed-item"><span class="time">${esc(time)}</span><span class="type" style="color:${typeColor}">${esc(a.action_type||'?')}</span><span class="msg">${esc(a.platform||'')} ${esc(a.subreddit||a.target||'')} ${a.project?'<span style="color:var(--text2)">('+esc(a.project)+')</span>':''}</span></div>`;
+  }).join('');
+}
+
+// ── Render: Conversations ────────────────────────────────
+function renderConversations(d) {
+  const dms = d.dms||[];
+  const alerts = d.alerts||[];
+  const dmEl = document.getElementById('dmList');
+  if (!dms.length) dmEl.innerHTML='<p class="no-data">No conversations yet</p>';
+  else dmEl.innerHTML = dms.map(m => {
+    const dir = m.direction==='sent'?'▸':'◂';
+    const color = m.direction==='sent'?'var(--green)':'var(--cyan)';
+    const ts = m.timestamp?m.timestamp.split(' ').pop().substring(0,5):'';
+    return `<div class="dm-item"><span class="dm-dir" style="color:${color}">${dir}</span><span class="dm-user">${esc(m.username)} <span style="font-size:10px;color:var(--text3)">${esc(m.platform)}</span></span><span class="dm-content">${esc(m.content)}</span><span class="dm-time">${esc(ts)}</span></div>`;
+  }).join('');
+  const alEl = document.getElementById('alertList');
+  if (!alerts.length) alEl.innerHTML='<p class="no-data">No alerts</p>';
+  else alEl.innerHTML = alerts.map(a => {
+    const ts = a.timestamp?a.timestamp.split('T').pop().substring(0,5):'';
+    return `<div class="feed-item"><span class="time">${esc(ts)}</span><span class="msg">${esc(a.message)}</span></div>`;
+  }).join('');
+}
+
+// ── Render: Brain ────────────────────────────────────────
+function renderBrain(d) {
+  const el = document.getElementById('brainPanel');
+  if (d.error) { el.innerHTML=`<p class="no-data">${esc(d.error)}</p>`; return; }
+  let h = '';
+  const row = (l,v,c) => `<div class="brain-row"><span class="label">${l}</span><span class="value" style="color:${c||'var(--text)'}">${v}</span></div>`;
+  const subs = (d.top_subreddits||[]).slice(0,3).map(s => 'r/'+(s.name||s.subreddit||'?')).join(', ');
+  h += row('Top Subreddits', subs||'(learning...)', 'var(--green)');
+  h += row('Promo Ratio', Math.round((d.promo_ratio||0.25)*100)+'% promo', 'var(--cyan)');
+  h += row('Best Tone', d.best_tone||'N/A', 'var(--text)');
+  h += row('Discoveries', (d.discoveries||0)+' pending', d.discoveries>0?'var(--yellow)':'var(--text2)');
+  const pt = (d.post_type_top||[]).map(p => p.type+'('+p.avg_eng+')').join(', ');
+  h += row('Top Posts', pt||'-', 'var(--cyan)');
+  const sent = d.sentiment||{};
+  const sIcon = sent.avg>0.1?'▲':sent.avg<-0.1?'▼':'━';
+  const sColor = sent.avg>0.1?'var(--green)':sent.avg<-0.1?'var(--red)':'var(--yellow)';
+  h += row('Sentiment', `${sIcon} ${(sent.avg||0)>0?'+':''}${(sent.avg||0).toFixed(2)} (${sent.total_replies||0} replies)`, sColor);
+  const ab = d.ab_tests||[];
+  h += row('A/B Tests', ab.length?ab.map(e=>e.variable+'('+e.a_n+'v'+e.b_n+')').join(' | '):'0 active', ab.length?'var(--purple)':'var(--text2)');
+  h += row('Evolved Prompts', (d.evolved_prompts||0)+' templates', d.evolved_prompts>0?'var(--green)':'var(--text2)');
+  const llm = d.llm_stats||{};
+  if (llm.total_calls!==undefined) {
+    h += row('LLM Calls', `${llm.total_calls} (${llm.total_errors||0} err)`, llm.total_errors>0?'var(--red)':'var(--green)');
+    if (llm.groq_limit) {
+      const pct = Math.round((llm.groq_rpd||0)/llm.groq_limit*100);
+      h += row('Groq RPD', `${llm.groq_rpd||0}/${llm.groq_limit} (${pct}%)`, pct>80?'var(--red)':pct>50?'var(--yellow)':'var(--green)');
+    }
+    if (llm.creative_chain) h += row('Creative Chain', llm.creative_chain, 'var(--text2)');
+    const dis = llm.disabled_providers||{};
+    if (Object.keys(dis).length) h += row('Disabled', Object.entries(dis).map(([n,s])=>n+'('+Math.round(s/60)+'m)').join(', '), 'var(--red)');
+  }
+  const rel = d.relationships||{};
+  h += row('Relationships', `${rel.total||0} (${rel.friends||0} friends)`, 'var(--orange)');
+  el.innerHTML = h;
+}
+
+// ── Render: Performance ──────────────────────────────────
+function renderPerformance(d) {
+  const el = document.getElementById('perfPanel');
+  if (d.error) { el.innerHTML=`<p class="no-data">${esc(d.error)}</p>`; return; }
+  const gradeColor = {A:'var(--green)','A+':'var(--green)',B:'var(--cyan)',C:'var(--yellow)',D:'var(--orange)',F:'var(--red)'}[d.grade]||'var(--text)';
+  let h = `<div class="perf-grade" style="color:${gradeColor}">${esc(d.grade)}</div>`;
+  h += `<div style="text-align:center;color:var(--text2);font-size:12px;margin-bottom:14px">${d.score}/100 — ${d.total_actions||0} actions today</div>`;
+  const comp = d.components||{};
+  const max = d.max_per_component||{};
+  for (const [k,v] of Object.entries(comp)) {
+    const m = max[k]||20;
+    const pct = Math.round(v/m*100);
+    const color = pct>=80?'var(--green)':pct>=50?'var(--yellow)':'var(--red)';
+    h += `<div class="perf-bar-label"><span>${k.charAt(0).toUpperCase()+k.slice(1)}</span><span style="color:${color}">${v}/${m}</span></div>`;
+    h += `<div class="perf-bar"><div class="fill" style="width:${pct}%;background:${color}"></div></div>`;
+  }
+  if (d.improvements&&d.improvements.length) h += `<div class="perf-improvements">Suggestions: ${d.improvements.map(i=>esc(i)).join(' | ')}</div>`;
+  else h += `<div style="margin-top:10px;font-size:12px;color:var(--green)">All systems optimal</div>`;
+  el.innerHTML = h;
+}
+
+// ── Render: Insights ─────────────────────────────────────
+function renderInsights(d) {
+  const el = document.getElementById('insightsPanel');
+  if (d.error) { el.innerHTML=`<p class="no-data">${esc(d.error)}</p>`; return; }
+  let h = '';
+  if (d.top_subreddits&&d.top_subreddits.length) {
+    h += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Top Subreddits</div>';
+    const mx = Math.max(...d.top_subreddits.map(s=>s.avg_engagement||s.avg_eng||1));
+    d.top_subreddits.slice(0,5).forEach(s => {
+      const eng = s.avg_engagement||s.avg_eng||0;
+      h += `<div class="insight-bar"><span style="min-width:110px;font-weight:500">${esc(s.subreddit||s.name||'?')}</span><div class="bar"><div class="fill" style="width:${Math.round(eng/mx*100)}%"></div></div><span style="font-weight:600">${eng.toFixed(1)}</span></div>`;
+    });
+    h += '</div>';
+  }
+  if (d.best_tone) h += `<div style="margin-bottom:10px"><span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Best Tone: </span><span class="insight-tag">${esc(d.best_tone)}</span></div>`;
+  if (d.post_type_stats&&d.post_type_stats.length) {
+    h += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Post Types</div>';
+    d.post_type_stats.slice(0,5).forEach(p => {
+      const e = p.avg_engagement||p.avg_eng||0;
+      h += `<div class="insight-bar"><span style="min-width:90px;font-weight:500">${esc(p.post_type||'?')}</span><div class="bar"><div class="fill" style="width:${Math.min(100,e*10)}%;background:var(--purple)"></div></div><span style="font-weight:600">${e.toFixed(1)}</span></div>`;
+    });
+    h += '</div>';
+  }
+  if (d.sentiment&&d.sentiment.length) {
+    h += '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Sentiment by Tone</div>';
+    d.sentiment.forEach(s => {
+      const sc = s.avg_sentiment||s.avg_score||0;
+      const c = sc>0.3?'var(--green)':sc<-0.3?'var(--red)':'var(--yellow)';
+      h += `<div class="insight-bar"><span style="min-width:70px">${esc(s.tone||'?')}</span><div class="bar"><div class="fill" style="width:${Math.min(100,Math.abs(sc)*100)}%;background:${c}"></div></div><span style="color:${c};font-weight:600">${sc>0?'+':''}${sc.toFixed(2)}</span></div>`;
+    });
+    h += '</div>';
+  }
+  if (d.experiments&&d.experiments.length) {
+    h += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">A/B Experiments</div>';
+    d.experiments.forEach(e => {
+      const aW = e.a_eng>e.b_eng;
+      h += `<div style="font-size:11px;margin:4px 0;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px"><strong>${esc(e.variable||e.name)}</strong>: <span style="color:${aW?'var(--green)':'var(--text2)'}">${esc(e.variant_a)} (${e.a_eng.toFixed(1)}, n=${e.a_n})</span> vs <span style="color:${!aW?'var(--green)':'var(--text2)'}">${esc(e.variant_b)} (${e.b_eng.toFixed(1)}, n=${e.b_n})</span></div>`;
+    });
+    h += '</div>';
+  }
+  if (d.optimal_promo_ratio!==undefined) {
+    const pct = Math.round(d.optimal_promo_ratio*100);
+    h += `<div style="margin-top:8px"><span style="font-size:10px;color:var(--text3);text-transform:uppercase">Promo Ratio: </span><span class="insight-tag">${pct}% promo / ${100-pct}% organic</span></div>`;
+  }
+  el.innerHTML = h || '<p class="no-data">No insights yet — agent is learning</p>';
+}
+
+// ── Render: Opportunities ────────────────────────────────
+function renderOpps(d) {
+  const el = document.getElementById('oppsList');
+  if (d.error||!d||!d.length) { el.innerHTML='<p class="no-data">No pending opportunities</p>'; return; }
+  el.innerHTML = d.slice(0,25).map(o => {
+    const sc = o.score||o.relevance_score||0;
+    const c = sc>=7?'var(--green)':sc>=4?'var(--yellow)':'var(--text2)';
+    return `<div class="feed-item"><span style="color:${c};font-weight:800;min-width:32px;font-size:13px">${sc.toFixed(1)}</span><span class="type" style="color:var(--orange)">${esc(o.platform||'')}</span><span class="msg">${esc(o.subreddit_or_query||o.subreddit||'')} — ${esc((o.title||o.content||'').substring(0,80))}</span></div>`;
+  }).join('');
+}
+
+// ── Render: Communities ──────────────────────────────────
+function renderCommunities(comms) {
+  const el = document.getElementById('commList');
+  const countEl = document.getElementById('commCount');
+  const statsEl = document.getElementById('commStats');
+
+  if (!comms||!comms.length) {
+    el.innerHTML = '<p class="no-data">No managed communities yet. The agent will create them automatically.</p>';
+    countEl.textContent = '0';
+    document.getElementById('mrHubs').textContent = '0';
+    return;
+  }
+
+  countEl.textContent = comms.length;
+  document.getElementById('mrHubs').textContent = comms.length;
+
+  // Stats
+  const setup = comms.filter(c => c.setup_complete).length;
+  const active = comms.filter(c => c.post_count > 0).length;
+  statsEl.innerHTML = `
+    <div class="stat-card purple"><div class="sv">${comms.length}</div><div class="sl">Total Hubs</div></div>
+    <div class="stat-card green"><div class="sv">${setup}</div><div class="sl">Setup Complete</div></div>
+    <div class="stat-card cyan"><div class="sv">${active}</div><div class="sl">Active</div></div>
+    <div class="stat-card yellow"><div class="sv">${comms.length-setup}</div><div class="sl">Pending Setup</div></div>`;
+
+  // Cards
+  el.innerHTML = comms.map(c => {
+    const setupPct = c.setup_complete ? 100 : Math.round((
+      (c.rules_count>0?25:0) + (c.flair_count>0?25:0) + (c.automod_configured?25:0) + (c.sticky_post_1?25:0)
+    ));
+    const typeColor = c.ownership_type==='created'?'var(--green)':c.ownership_type==='claimed'?'var(--cyan)':'var(--text2)';
+    return `<div class="community-card">
+      <div class="comm-header">
+        <span class="comm-name">r/${esc(c.subreddit||c.name)}</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="badge ${c.setup_complete?'on':'warning'}">${c.setup_complete?'Ready':'Setup '+setupPct+'%'}</span>
+          <span style="font-size:10px;color:${typeColor};text-transform:uppercase">${esc(c.ownership_type||'pending')}</span>
+        </div>
+      </div>
+      <div class="comm-stats">
+        <span style="color:var(--text2)">${esc(c.project||'')}</span>
+        <span>Rules: ${c.rules_count||0}</span>
+        <span>Flairs: ${c.flair_count||0}</span>
+        <span>Posts: ${c.post_count||0}</span>
+        <span>Subs: ${c.subscribers||'?'}</span>
+      </div>
+      <div class="comm-setup-bar"><div class="fill" style="width:${setupPct}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderTakeoverTargets(d) {
+  const el = document.getElementById('takeoverTargets');
+  if (!d||!d.length) { el.innerHTML='<p class="no-data">No takeover targets found</p>'; return; }
+  el.innerHTML = d.map(t => {
+    const sc = t.takeover_score||t.score||0;
+    const c = sc>=8?'var(--green)':sc>=6?'var(--yellow)':'var(--text2)';
+    return `<div class="feed-item"><span style="color:${c};font-weight:800;min-width:28px">${sc.toFixed(1)}</span><span class="type" style="color:var(--orange)">r/${esc(t.subreddit)}</span><span class="msg">${esc(t.project||'')} — ${esc(t.status||'pending')}</span></div>`;
+  }).join('');
+}
+
+function renderTakeoverRequests(d) {
+  const el = document.getElementById('takeoverRequests');
+  if (!d||!d.length) { el.innerHTML='<p class="no-data">No takeover requests submitted</p>'; return; }
+  el.innerHTML = d.map(r => {
+    const statusColor = {pending:'var(--yellow)',approved:'var(--green)',denied:'var(--red)'}[r.status]||'var(--text2)';
+    return `<div class="feed-item"><span class="type" style="color:var(--orange)">r/${esc(r.subreddit)}</span><span class="msg">${esc(r.project)} — ${esc(r.account)}</span><span style="color:${statusColor};font-weight:600;min-width:60px;text-align:right">${esc(r.status)}</span></div>`;
+  }).join('');
+}
+
+// ── Render: Server ───────────────────────────────────────
+function renderServer(d) {
+  if (!d||d.error) return;
+  const cpu=d.cpu||{}, ram=d.ram||{}, disk=d.disk||{}, proc=d.process||{}, db=d.database||{};
+
+  // Update ribbon
+  document.getElementById('mrCPU').textContent = (cpu.usage_pct||0)+'%';
+  document.getElementById('mrRAM').textContent = (proc.rss_mb||0)+'MB';
+  document.getElementById('mrCPU').style.color = cpu.usage_pct>60?'var(--red)':cpu.usage_pct>30?'var(--yellow)':'var(--green)';
+  document.getElementById('mrRAM').style.color = proc.rss_mb>300?'var(--red)':proc.rss_mb>200?'var(--yellow)':'var(--green)';
+
+  document.getElementById('serverStats').innerHTML = `
+    <div class="stat-card ${cpu.usage_pct>60?'red':cpu.usage_pct>30?'yellow':'green'}"><div class="sv">${cpu.usage_pct||0}%</div><div class="sl">CPU (${cpu.cores||'?'} cores)</div></div>
+    <div class="stat-card ${ram.percent>85?'red':ram.percent>70?'yellow':'green'}"><div class="sv">${ram.percent||0}%</div><div class="sl">RAM ${ram.used_gb||0}/${ram.total_gb||0}G</div></div>
+    <div class="stat-card ${disk.percent>90?'red':disk.percent>80?'yellow':'green'}"><div class="sv">${disk.percent||0}%</div><div class="sl">Disk ${disk.free_gb||0}G free</div></div>
+    <div class="stat-card blue"><div class="sv">${proc.rss_mb||0}</div><div class="sl">RSS MB</div></div>
+    <div class="stat-card purple"><div class="sv">${proc.threads||0}</div><div class="sl">Threads</div></div>
+    <div class="stat-card cyan"><div class="sv">${db.size_mb||0}</div><div class="sl">DB Size MB</div></div>`;
+  document.getElementById('serverBars').innerHTML = resBar('CPU',cpu.usage_pct||0,50,80)+resBar('RAM',ram.percent||0,70,90)+resBar('Disk',disk.percent||0,80,95)+resBar('Bot',Math.min(100,Math.round((proc.rss_mb||0)/4)),50,80);
+
+  const hist = d.history||[];
+  if (hist.length>2) {
+    const labels = hist.map(h=>h.ts);
+    const cpuData = hist.map(h=>h.cpu);
+    const ramData = hist.map(h=>h.ram);
+    if (charts.resources) {
+      charts.resources.data.labels=labels; charts.resources.data.datasets[0].data=cpuData; charts.resources.data.datasets[1].data=ramData; charts.resources.update();
+    } else {
+      charts.resources = new Chart(document.getElementById('chartResources').getContext('2d'), {
+        type:'line', data:{labels, datasets:[
+          {label:'CPU %',data:cpuData,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.05)',fill:true,tension:.3,pointRadius:0,borderWidth:2},
+          {label:'RAM %',data:ramData,borderColor:'#a855f7',backgroundColor:'rgba(168,85,247,.05)',fill:true,tension:.3,pointRadius:0,borderWidth:2}
+        ]},
+        options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#64748b',font:{size:11},usePointStyle:true}}},scales:{x:{ticks:{color:'#475569',font:{size:10},maxTicksLimit:10},grid:{color:'rgba(30,45,61,.5)'}},y:{min:0,max:100,ticks:{color:'#475569'},grid:{color:'rgba(30,45,61,.5)'}}}}
+      });
+    }
+  }
+}
+
+// ── Render: Manage Projects ──────────────────────────────
+function renderManageProjects(d) {
+  const el = document.getElementById('projectsManage');
+  if (!d||!d.length) { el.innerHTML='<p class="no-data">No projects</p>'; return; }
+  el.innerHTML = d.map(p => `
+    <div class="entity-card">
+      <div>
+        <div class="name">${esc(p.name)} <span class="badge ${p.enabled?'on':'off'}">${p.enabled?'Active':'Off'}</span></div>
+        <div class="meta">${esc(p.url||'')} — ${p.actions_24h||0} actions/24h — weight: ${p.weight||1}</div>
+      </div>
+      <div class="actions-area">
+        <button class="btn btn-sm" onclick="editProject(${JSON.stringify(p.name)})">Edit</button>
+        <button class="btn btn-sm danger" onclick="deleteProject(${JSON.stringify(p.name)})">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+// ── Render: Manage Accounts ──────────────────────────────
+function renderManageAccounts(d) {
+  const el = document.getElementById('accountsManage');
+  if (!d||!d.length) { el.innerHTML='<p class="no-data">No accounts</p>'; return; }
+  // Filter out Twitter accounts
+  const filtered = d.filter(a => a.platform !== 'twitter');
+  el.innerHTML = filtered.map(a => `
+    <div class="entity-card">
+      <div>
+        <div class="name">@${esc(a.username)} <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${esc(a.platform)}</span></div>
+        <div class="meta">${a.total_24h||0} actions — C:${a.comments||0} L:${a.likes||0} P:${a.posts||0} — ${esc(a.persona||'default')}</div>
+      </div>
+      <div class="actions-area">
+        ${hpBar(a.status)}
+        <span class="badge ${a.status==='healthy'?'healthy':a.status==='cooldown'?'cooldown':'error'}">${esc(a.status)}</span>
+        <button class="btn btn-sm danger" onclick="removeAccount(${JSON.stringify(a.platform)},${JSON.stringify(a.username)})">Remove</button>
+      </div>
+    </div>`).join('');
+}
+
+// ── Controls ─────────────────────────────────────────────
+async function doControl(action) {
+  try {
+    const d = await apiPost('/api/control/'+action);
+    if (d&&!d.ok) { toast(d.error||'Failed','error'); return; }
+    if (action==='pause') paused=true;
+    if (action==='resume') paused=false;
+    document.getElementById('btnPause').disabled=paused;
+    document.getElementById('btnResume').disabled=!paused;
+    toast(action.charAt(0).toUpperCase()+action.slice(1)+' executed','success');
+  } catch(e) { toast('Error: '+e.message,'error'); }
+}
+async function emergencyStop() {
+  if (!confirm('EMERGENCY STOP — Freeze ALL operations?')) return;
+  try { await apiPost('/api/control/emergency-stop'); toast('EMERGENCY STOP ACTIVATED','error'); refresh(); } catch(e) { toast(e.message,'error'); }
+}
+async function emergencyReset() {
+  try { await apiPost('/api/control/emergency-reset'); toast('Emergency reset OK','success'); refresh(); } catch(e) { toast(e.message,'error'); }
+}
+
+// ── CRUD: Projects ───────────────────────────────────────
+async function submitProject() {
+  const name = document.getElementById('pName').value.trim();
+  const url = document.getElementById('pUrl').value.trim();
+  const desc = document.getElementById('pDesc').value.trim();
+  if (!name||!url||!desc) { toast('Name, URL and Description required','error'); return; }
+  try {
+    const d = await apiPost('/api/projects', {
+      name, url, description:desc, project_type:document.getElementById('pType').value,
+      weight:parseFloat(document.getElementById('pWeight').value)||1.0,
+      tagline:document.getElementById('pTagline').value.trim(),
+      selling_points:splitCSV(document.getElementById('pSelling').value),
+      target_audiences:splitCSV(document.getElementById('pAudiences').value),
+    });
+    if (d.ok) { toast('Project created','success'); closeModal(); refresh(); }
+    else toast(d.detail||'Failed','error');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function editProject(name) {
+  _editingProject = name;
+  try {
+    const d = await api('/api/projects/'+encodeURIComponent(name));
+    const proj = d.project||{};
+    document.getElementById('editProjName').textContent = name;
+    document.getElementById('epEnabled').value = proj.enabled!==false?'true':'false';
+    document.getElementById('epWeight').value = proj.weight||1.0;
+    document.getElementById('epUrl').value = proj.url||'';
+    document.getElementById('epDesc').value = proj.description||'';
+    document.getElementById('epTagline').value = proj.tagline||'';
+    document.getElementById('epTone').value = (d.tone||{}).style||'helpful_casual';
+    const reddit = d.reddit||{};
+    const subs = reddit.target_subreddits||{};
+    document.getElementById('epSubsPrimary').value = (subs.primary||[]).join(', ');
+    document.getElementById('epSubsSecondary').value = (subs.secondary||[]).join(', ');
+    document.getElementById('epRedditKw').value = (reddit.keywords||[]).join(', ');
+    openModal('editProject');
+  } catch(e) { toast('Error loading project','error'); }
+}
+
+async function submitEditProject() {
+  const body = {
+    enabled:document.getElementById('epEnabled').value==='true',
+    weight:parseFloat(document.getElementById('epWeight').value)||1.0,
+    url:document.getElementById('epUrl').value.trim()||null,
+    description:document.getElementById('epDesc').value.trim()||null,
+    tagline:document.getElementById('epTagline').value.trim()||null,
+    tone_style:document.getElementById('epTone').value||null,
+    reddit_subreddits_primary:splitCSV(document.getElementById('epSubsPrimary').value),
+    reddit_subreddits_secondary:splitCSV(document.getElementById('epSubsSecondary').value),
+    reddit_keywords:splitCSV(document.getElementById('epRedditKw').value),
+  };
+  try {
+    const d = await apiPut('/api/projects/'+encodeURIComponent(_editingProject), body);
+    if (d.ok) { toast('Project updated','success'); closeModal(); refresh(); }
+    else toast(d.detail||'Failed','error');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function deleteProject(name) {
+  if (!confirm(`Delete project "${name}"?`)) return;
+  try { const d=await apiDelete('/api/projects/'+encodeURIComponent(name)); if(d.ok){toast('Deleted','success');refresh()}else toast(d.detail||'Failed','error'); } catch(e){toast(e.message,'error')}
+}
+
+// ── CRUD: Accounts ───────────────────────────────────────
+async function submitAccount() {
+  const platform=document.getElementById('aPlat').value, username=document.getElementById('aUser').value.trim(), password=document.getElementById('aPass').value.trim();
+  if (!username||!password) { toast('Username and Password required','error'); return; }
+  try {
+    const d = await apiPost('/api/accounts', {platform,username,password,email:document.getElementById('aEmail').value.trim(),persona:document.getElementById('aPersona').value});
+    toast(d.message||'Done', d.ok?'success':'error');
+    if (d.ok) { closeModal(); refresh(); }
+  } catch(e) { toast(e.message,'error'); }
+}
+async function removeAccount(platform, username) {
+  if (!confirm(`Remove @${username} (${platform})?`)) return;
+  try { const d=await apiDelete(`/api/accounts/${platform}/${encodeURIComponent(username)}`); toast(d.message||'Done',d.ok?'success':'error'); refresh(); } catch(e){toast(e.message,'error')}
+}
+
+// ── Cookies Management ──────────────────────────────────
+function renderCookies(d) {
+  const el = document.getElementById('cookiesStatus');
+  if (!d||!d.length) { el.innerHTML='<p class="no-data">No accounts configured</p>'; return; }
+  // Filter out Twitter
+  const filtered = d.filter(c => c.platform !== 'twitter');
+  el.innerHTML = filtered.map(c => {
+    const ok = c.has_cookies;
+    const keys = (c.key_cookies||[]).join(', ');
+    return `<div class="entity-card">
+      <div>
+        <div class="name">@${esc(c.username)} <span style="font-size:10px;color:var(--text3);text-transform:uppercase">${esc(c.platform)}</span></div>
+        <div class="meta">${ok
+          ? `${c.count||'?'} cookies | Keys: ${keys||'none'} | ${c.size_kb||0}KB`
+          : '<span style="color:var(--red)">No cookies — login required</span>'}</div>
+      </div>
+      <div class="actions-area">
+        <span class="badge ${ok?'on':'off'}">${ok?'Active':'Missing'}</span>
+        ${ok?`<button class="btn btn-sm danger" onclick="deleteCookies(${JSON.stringify(c.platform)},${JSON.stringify(c.username)})">Delete</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let _cookieAccounts = {};
+async function loadCookieAccounts() {
+  const plat = document.getElementById('cookiePlat').value;
+  const sel = document.getElementById('cookieAccount');
+  sel.innerHTML = '';
+  const cached = _cookieAccounts[plat];
+  if (cached) { cached.forEach(a => { const o=document.createElement('option'); o.value=a; o.textContent='@'+a; sel.appendChild(o); }); return; }
+  try {
+    const d = await api('/api/cookies');
+    const accs = d.filter(c=>c.platform===plat).map(c=>c.username);
+    _cookieAccounts[plat] = accs;
+    accs.forEach(a => { const o=document.createElement('option'); o.value=a; o.textContent='@'+a; sel.appendChild(o); });
+  } catch(e) { sel.innerHTML='<option>Error</option>'; }
+}
+
+async function submitPasteCookies() {
+  const platform=document.getElementById('cookiePlat').value, username=document.getElementById('cookieAccount').value, raw=document.getElementById('cookieRaw').value.trim();
+  if (!username||!raw) { toast('Select account and paste cookies','error'); return; }
+  try {
+    const d = await apiPost('/api/cookies/paste', {platform,username,cookies:raw});
+    if (d.ok) {
+      let msg = d.message;
+      if (d.key_cookies_found&&d.key_cookies_found.length) msg += ` | Keys: ${d.key_cookies_found.join(', ')}`;
+      toast(msg, 'success'); closeModal(); refresh();
+    } else toast(d.detail||'Failed','error');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function deleteCookies(platform, username) {
+  if (!confirm(`Delete cookies for @${username}?`)) return;
+  try { const d=await apiDelete(`/api/cookies/${platform}/${encodeURIComponent(username)}`); toast(d.message||'Done',d.ok?'success':'error'); _cookieAccounts={}; refresh(); } catch(e){toast(e.message,'error')}
+}
+
+// ── Modals ───────────────────────────────────────────────
+function openModal(id) { document.getElementById('modal-'+id).classList.add('show'); if(id==='pasteCookies')loadCookieAccounts(); }
+function closeModal() { document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('show')); }
+
+// ── WebSocket Logs ───────────────────────────────────────
+function connectWS() {
+  if (ws) { ws.close(); ws=null; }
+  if (!TOKEN) return;
+  const proto = location.protocol==='https:'?'wss:':'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/logs?token=${encodeURIComponent(TOKEN)}`);
+  ws.onmessage = (e) => {
+    const rec = JSON.parse(e.data);
+    _logCount++;
+    document.getElementById('logCount').textContent = _logCount;
+
+    // Logs panel (server tab)
+    const panel = document.getElementById('logsPanel');
+    const div = document.createElement('div');
+    div.className = 'feed-item';
+    const levelColor = {ERROR:'var(--red)',WARNING:'var(--yellow)',INFO:'var(--green)',DEBUG:'var(--text3)'}[rec.level]||'var(--text2)';
+    div.innerHTML = `<span class="time">${esc(rec.ts)}</span><span class="type" style="color:${levelColor}">${esc(rec.level)}</span><span class="msg">${esc(rec.msg)}</span>`;
+    panel.appendChild(div);
+    while (panel.children.length>200) panel.removeChild(panel.firstChild);
+    panel.scrollTop = panel.scrollHeight;
+
+    // Chat feed (activity tab)
+    const chat = document.getElementById('chatFeed');
+    const cm = document.createElement('div');
+    cm.className = 'chat-msg';
+    const cat = rec.cat||'';
+    cm.innerHTML = `<span class="chat-ts">${esc(rec.ts)}</span>${cat?`<span class="cat-badge ${cat}">${cat}</span>`:''}<span class="chat-text">${esc(rec.msg)}</span>`;
+    chat.appendChild(cm);
+    while (chat.children.length>250) chat.removeChild(chat.firstChild);
+    chat.scrollTop = chat.scrollHeight;
+  };
+  ws.onclose = () => { if(TOKEN) setTimeout(connectWS, 3000); };
+  ws.onerror = () => { ws.close(); };
+}
+
+// ── Refresh Loop ─────────────────────────────────────────
+async function refresh() {
+  try {
+    const status = await api('/api/status').catch(()=>null);
+    if (status) renderStatus(status);
+
+    if (currentTab === 'command') {
+      const [stats, minimaps, schedule, history, acctPerf] = await Promise.allSettled([
+        api('/api/stats'), api('/api/minimaps'), api('/api/schedule'), api('/api/history?hours=168'),
+        api('/api/accounts/reddit/performance')
+      ]);
+      if (stats.status==='fulfilled') renderStats(stats.value);
+      if (minimaps.status==='fulfilled') renderMinimaps(minimaps.value);
+      if (schedule.status==='fulfilled') renderSchedule(schedule.value, 'scheduleList');
+      if (history.status==='fulfilled') renderTimeline(history.value);
+      if (acctPerf.status==='fulfilled') renderRedditAcctPerf(acctPerf.value);
+    }
+    else if (currentTab === 'activity') {
+      const [actions, convos] = await Promise.allSettled([api('/api/actions?limit=50'), api('/api/conversations')]);
+      if (actions.status==='fulfilled') renderActions(actions.value);
+      if (convos.status==='fulfilled') renderConversations(convos.value);
+    }
+    else if (currentTab === 'intel') {
+      const [brain, perf, insights, opps] = await Promise.allSettled([
+        api('/api/brain'), api('/api/performance'), api('/api/insights'), api('/api/opportunities?limit=25')
+      ]);
+      if (brain.status==='fulfilled') renderBrain(brain.value);
+      if (perf.status==='fulfilled') renderPerformance(perf.value);
+      if (insights.status==='fulfilled') renderInsights(insights.value);
+      if (opps.status==='fulfilled') renderOpps(opps.value);
+    }
+    else if (currentTab === 'communities') {
+      const [comms, targets, requests] = await Promise.allSettled([
+        api('/api/communities'), api('/api/takeover/targets'), api('/api/takeover/requests')
+      ]);
+      if (comms.status==='fulfilled') renderCommunities(comms.value);
+      if (targets.status==='fulfilled') renderTakeoverTargets(targets.value);
+      if (requests.status==='fulfilled') renderTakeoverRequests(requests.value);
+    }
+    else if (currentTab === 'manage') {
+      const [projects, accounts, cookies] = await Promise.allSettled([
+        api('/api/projects'), api('/api/accounts'), api('/api/cookies')
+      ]);
+      if (projects.status==='fulfilled') renderManageProjects(projects.value);
+      if (accounts.status==='fulfilled') {
+        renderManageAccounts(accounts.value);
+        document.getElementById('mrAccounts').textContent = accounts.value.filter(a=>a.platform!=='twitter').length;
+      }
+      if (cookies.status==='fulfilled') renderCookies(cookies.value);
+    }
+    else if (currentTab === 'server') {
+      const [server, schedule] = await Promise.allSettled([api('/api/server'), api('/api/schedule')]);
+      if (server.status==='fulfilled') renderServer(server.value);
+      if (schedule.status==='fulfilled') renderSchedule(schedule.value, 'scheduleListFull');
+    }
+  } catch(e) { console.error('Refresh error:', e); }
+}
+
+// ── Start ────────────────────────────────────────────────
+function startDashboard() {
+  refresh();
+  refreshTimer = setInterval(refresh, 5000);
+  connectWS();
+}
+
+// ── Boot ─────────────────────────────────────────────────
+async function boot() {
+  if (!TOKEN) { showLogin(); return; }
+  try {
+    const r = await fetch('/api/status', {headers:{'Authorization':'Bearer '+TOKEN}});
+    if (r.ok) showDashboard();
+    else { TOKEN=''; localStorage.removeItem('milo_token'); showLogin(); }
+  } catch(e) { showDashboard(); }
+}
+boot();
+</script>
+</body>
+</html>

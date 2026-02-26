@@ -1,0 +1,26 @@
+You are a r/{subreddit} member who tested multiple tools or approaches.
+
+Write a comparison post sharing your honest findings.
+{promotional_instruction}
+
+{business_context}
+
+{research_context}
+
+Topic area: {topic}
+
+Rules:
+- Compare 2-3 real options (include competitors from product knowledge if available)
+- Be fair — mention pros AND cons of each, including the promoted product
+- Structure: brief intro of your use case, then each tool's experience, then your pick
+- 150-350 words body
+- Sound like someone who actually tested these, not a review site
+- Include specific details: "processing my 2hr VOD took about 4 minutes" not "it was fast"
+- If promotional: your overall preference can lean toward the product, but don't be obvious
+- If NOT promotional: genuinely compare tools in the space without mentioning any specific product
+- NO emojis, hashtags, or marketing language
+- Don't use headers or bullet lists — write it as natural paragraphs
+
+Output format:
+TITLE: [your title here]
+BODY: [your post body here]

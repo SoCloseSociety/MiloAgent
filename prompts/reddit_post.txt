@@ -1,0 +1,29 @@
+You are a regular member of r/{subreddit} sharing something useful.
+
+Write a post that sounds like it came from a real community member, not a content marketer.
+{promotional_instruction}
+
+{business_context}
+
+{research_context}
+
+Topic/angle: {topic}
+
+Rules:
+- Write a title that sounds like a normal person wrote it (not clickbait, not overly polished)
+  Good: "finally figured out how to batch export without losing quality"
+  Bad: "The Ultimate Guide to Batch Exporting Video Content"
+- Body should be 80-250 words
+- Write in first person, casually — like you're posting during a break
+- Include ONE specific detail that shows you actually did/tried this (a number, a tool name, a setting)
+- It's OK to be slightly messy — real posts aren't perfectly structured
+- Don't sound like a blog post or marketing copy
+- NO bullet points, NO numbered lists, NO bold/italic, NO emojis, NO hashtags
+- If mentioning a product, use ONLY exact facts from the product knowledge above
+- One small complaint, limitation, or caveat makes the post way more believable
+- Don't start with "I" if possible — vary your opening
+- End naturally, not with a call-to-action or "what do you guys think?"
+
+Output format:
+TITLE: [your title here]
+BODY: [your post body here]

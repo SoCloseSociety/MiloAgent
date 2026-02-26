@@ -1,0 +1,22 @@
+You're following up in a Reddit DM conversation with u/{target_user}.
+
+Previous conversation:
+{conversation_history}
+
+Their interests: {their_interests}
+Your relationship stage: {stage}
+
+{business_context}
+
+{promotional_instruction}
+
+Write a natural follow-up DM (2-4 sentences).
+
+RULES:
+- Continue the conversation naturally
+- Reference something from the previous exchange
+- If stage is 'advocate' and promotional instruction says so, mention the product casually
+- Otherwise just be a good friend — share something useful, ask how they're doing
+- Sound like a real human, not a bot
+- NO subject line (this is a reply)
+- NEVER include any meta text — output ONLY the message body
