@@ -2601,7 +2601,7 @@ class Orchestrator:
 
         logger.info("Running community management cycle...")
         max_subs = cm_settings.get("max_subs_per_cycle", 5)
-        stats = {"setup": 0, "moderated": 0, "stickies_refreshed": 0}
+        stats = {"created": 0, "setup": 0, "moderated": 0, "stickies_refreshed": 0}
 
         for project in self.projects:
             proj_name = project.get("project", {}).get("name", "unknown")
@@ -2614,6 +2614,29 @@ class Orchestrator:
                 bot = self._get_reddit_bot(account)
 
                 try:
+                    # 0. Try to create the subreddit if it was registered from config
+                    #    (config_sync means we know the name but haven't confirmed it exists)
+                    if hub.get("created_by") == "config_sync" and not hub.get("setup_complete"):
+                        sub_name = hub["subreddit"]
+                        reddit_cfg = project.get("reddit", {})
+                        sub_cfg = next(
+                            (s for s in reddit_cfg.get("owned_subreddits", [])
+                             if s.get("name") == sub_name),
+                            {},
+                        )
+                        title = sub_cfg.get("title", f"r/{sub_name}")
+                        desc = sub_cfg.get("niche", project.get("project", {}).get("description", ""))
+                        created = self.hub_manager.create_subreddit(
+                            bot, sub_name, title, desc, proj_name,
+                        )
+                        if created:
+                            stats["created"] += 1
+                            logger.info(f"Subreddit r/{sub_name} created/confirmed for {proj_name}")
+                        else:
+                            logger.warning(f"Could not create/confirm r/{sub_name} — will retry next cycle")
+                            continue  # Skip setup if we can't create it
+                        time.sleep(random.uniform(10, 30))
+
                     # 1. Complete setup for new hubs
                     if not hub.get("setup_complete"):
                         self.community_manager.setup_new_subreddit(
@@ -2644,7 +2667,7 @@ class Orchestrator:
 
         if any(v > 0 for v in stats.values()):
             self._send_telegram_alert(
-                f"Community management: {stats['setup']} setups, "
+                f"Community management: {stats['created']} created, {stats['setup']} setups, "
                 f"{stats['moderated']} moderated, {stats['stickies_refreshed']} stickies refreshed"
             )
             logger.info(f"Community management cycle: {stats}")

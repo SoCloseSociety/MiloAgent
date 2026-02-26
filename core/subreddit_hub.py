@@ -56,6 +56,7 @@ class SubredditHubManager:
                         subscribers INTEGER DEFAULT 0,
                         last_post_at TEXT,
                         status TEXT DEFAULT 'active',
+                        setup_complete INTEGER DEFAULT 0,
                         sidebar_text TEXT,
                         rules TEXT,
                         metadata TEXT
@@ -64,6 +65,14 @@ class SubredditHubManager:
                     CREATE INDEX IF NOT EXISTS idx_hubs_project ON subreddit_hubs(project);
                     CREATE INDEX IF NOT EXISTS idx_hubs_status ON subreddit_hubs(status);
                 """)
+                # Migration: add setup_complete column to existing tables
+                try:
+                    self.db.conn.execute(
+                        "ALTER TABLE subreddit_hubs ADD COLUMN setup_complete INTEGER DEFAULT 0"
+                    )
+                    logger.info("Migrated subreddit_hubs: added setup_complete column")
+                except Exception:
+                    pass  # Column already exists
         except Exception as e:
             logger.debug(f"Hub table creation: {e}")
 
@@ -396,9 +405,14 @@ Rules:
         """
         proj_name = project.get("project", {}).get("name", "")
         hubs = self.get_hubs(proj_name)
-        stats = {"posts_created": 0, "hubs_active": len(hubs)}
+        # Only animate hubs that have completed setup
+        ready_hubs = [h for h in hubs if h.get("setup_complete")]
+        stats = {"posts_created": 0, "hubs_active": len(ready_hubs)}
 
-        for hub in hubs:
+        if not ready_hubs and hubs:
+            logger.debug(f"Hub animation: {len(hubs)} hubs for {proj_name} but none setup-complete yet")
+
+        for hub in ready_hubs:
             try:
                 url = self.post_to_hub(reddit_bot, hub, project)
                 if url:
