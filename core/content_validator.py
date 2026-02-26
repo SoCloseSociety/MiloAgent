@@ -105,7 +105,7 @@ class ContentValidator:
         # Check 4: Bot-like patterns
         bot_issues = self._check_bot_patterns(content)
         issues.extend(bot_issues)
-        score -= len(bot_issues) * 0.1
+        score -= len(bot_issues) * 0.15
 
         # Check 5: Length appropriateness
         length_issues = self._check_length(content, platform)
@@ -119,7 +119,7 @@ class ContentValidator:
             score -= len(claim_issues) * 0.15
 
         score = max(0.0, min(1.0, score))
-        is_valid = score >= 0.5 and not any("CRITICAL" in i for i in issues)
+        is_valid = score >= 0.6 and not any("CRITICAL" in i for i in issues)
 
         if issues:
             logger.info(

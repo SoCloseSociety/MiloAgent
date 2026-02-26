@@ -71,6 +71,7 @@ class RedditWebBot(BasePlatform):
         # Circuit breaker: stop trying after repeated failures
         self._consecutive_failures = 0
         self._max_failures = 5
+        self._circuit_breaker_opened_at: Optional[float] = None
 
         # Track subscribed subreddits to avoid re-subscribing every cycle
         self._subscribed_subs: set = set()
@@ -474,13 +475,24 @@ class RedditWebBot(BasePlatform):
         """Generate, validate, and post a comment."""
         project_name = project.get("project", {}).get("name", "unknown")
 
-        # Circuit breaker
+        # Circuit breaker with auto-reset after 30 minutes
         if self._consecutive_failures >= self._max_failures:
-            logger.warning(
-                f"Circuit breaker open: {self._consecutive_failures} "
-                f"consecutive failures, skipping"
+            if self._circuit_breaker_opened_at is None:
+                self._circuit_breaker_opened_at = time.time()
+            elapsed = time.time() - self._circuit_breaker_opened_at
+            if elapsed < 1800:  # 30 minutes
+                logger.warning(
+                    f"Circuit breaker open: {self._consecutive_failures} "
+                    f"consecutive failures, retry in {int((1800 - elapsed) / 60)}min"
+                )
+                return False
+            # Auto-reset after 30 minutes
+            logger.info(
+                f"Circuit breaker auto-reset after {elapsed / 60:.0f}min "
+                f"({self._consecutive_failures} failures cleared)"
             )
-            return False
+            self._consecutive_failures = 0
+            self._circuit_breaker_opened_at = None
 
         # Need auth for posting
         if not self._ensure_auth():
@@ -575,7 +587,25 @@ class RedditWebBot(BasePlatform):
                 self._consecutive_failures += 1
                 return False
 
-            result = resp.json()
+            try:
+                result = resp.json()
+            except (ValueError, Exception):
+                logger.warning(
+                    f"Reddit returned non-JSON response (status={resp.status_code}), "
+                    f"likely auto-removed by spam filter"
+                )
+                self.db.log_action(
+                    platform="reddit",
+                    action_type="comment",
+                    account=self._username,
+                    project=project_name,
+                    target_id=opportunity["target_id"],
+                    content=comment_text,
+                    success=False,
+                    error_message="non-JSON response (auto-removed)",
+                )
+                self._consecutive_failures += 1
+                return False
             errors = result.get("json", {}).get("errors", [])
             if errors:
                 error_msg = str(errors)
@@ -595,6 +625,7 @@ class RedditWebBot(BasePlatform):
 
             # Success — reset circuit breaker
             self._consecutive_failures = 0
+            self._circuit_breaker_opened_at = None
 
             comment_data = (
                 result.get("json", {})
@@ -688,10 +719,7 @@ class RedditWebBot(BasePlatform):
             logger.warning(
                 f"Retry also failed (score={score2:.2f}): {issues2}"
             )
-            # If retry score is better than 0.4, use it anyway
-            if score2 >= 0.4:
-                return content_retry
-            return None
+            return None  # Never post content that fails validation twice
 
         except Exception as e:
             logger.debug(f"Validation error (continuing anyway): {e}")

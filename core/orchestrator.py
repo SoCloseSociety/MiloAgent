@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 MAX_SUBREDDITS_PER_SCAN = 12    # Never scan more than 12 subs per cycle
 MAX_KEYWORDS_PER_SUBREDDIT = 8  # Never search more than 8 keywords per sub
 SCAN_TIMEOUT_SECONDS = 900      # Hard timeout for entire scan operation (5 projects × 3 platforms + TG discovery)
-ACT_TIMEOUT_SECONDS = 90        # Hard timeout for action operations
+ACT_TIMEOUT_SECONDS = 150       # Hard timeout for action operations (Reddit needs 60-90s)
 LLM_TIMEOUT_SECONDS = 45        # Hard timeout for LLM calls
 
 
@@ -190,10 +190,36 @@ class Orchestrator:
         except Exception as e:
             logger.debug(f"Telegram alert failed: {e}")
 
+    def _sync_owned_subreddits(self):
+        """Register owned_subreddits from project configs into the hub DB."""
+        count = 0
+        for project in self.projects:
+            proj_name = project.get("project", {}).get("name", "unknown")
+            reddit_cfg = project.get("reddit", {})
+            owned = reddit_cfg.get("owned_subreddits", [])
+            for sub_cfg in owned:
+                sub_name = sub_cfg.get("name", "")
+                if not sub_name:
+                    continue
+                existing = self.hub_manager.get_hub(sub_name)
+                if not existing:
+                    self.hub_manager.register_hub(
+                        subreddit=sub_name,
+                        project=proj_name,
+                        created_by="config_sync",
+                        description=sub_cfg.get("title", ""),
+                        niche=sub_cfg.get("niche", ""),
+                    )
+                    count += 1
+        all_hubs = self.hub_manager.get_hubs()
+        if all_hubs:
+            logger.info(f"Synced {len(all_hubs)} owned subreddits as hubs ({count} new)")
+
     def _on_projects_reloaded(self, projects: List[Dict]):
         """Called when project files change on disk."""
         names = [p["project"]["name"] for p in projects]
         logger.info(f"Projects hot-reloaded: {names}")
+        self._sync_owned_subreddits()
         self._send_telegram_alert(
             f"Picked up config changes — now working on {len(projects)} projects: "
             f"{', '.join(names)}"
@@ -331,8 +357,11 @@ class Orchestrator:
             f"{state.disk_free_gb:.0f}GB disk free"
         )
 
+        # Register owned subreddits as hubs before anything else
+        self._sync_owned_subreddits()
+
         # Purge stale/low-quality opportunities on startup
-        self.db.purge_low_quality_opportunities(min_score=3.0, max_age_hours=48)
+        self.db.purge_low_quality_opportunities(min_score=3.0, max_age_hours=24)
 
         # SAFETY: Abort startup if resources already critical
         if state.ram_used_percent >= 85:
@@ -382,7 +411,7 @@ class Orchestrator:
         )
         self.scheduler.add_job(
             self._verify_comments, "interval",
-            hours=3, id="verify_comments",
+            hours=1, id="verify_comments",
             next_run_time=None,
         )
         self.scheduler.add_job(
@@ -457,7 +486,7 @@ class Orchestrator:
         # Periodic opportunity cleanup (every 6h)
         self.scheduler.add_job(
             lambda: self.db.purge_low_quality_opportunities(
-                min_score=3.0, max_age_hours=48
+                min_score=3.0, max_age_hours=24
             ),
             "interval", hours=6, id="opportunity_purge",
             next_run_time=datetime.now() + timedelta(minutes=30),
@@ -1497,7 +1526,7 @@ class Orchestrator:
         removed = 0
 
         recent = self.db.get_recent_actions(
-            hours=12, platform="reddit", limit=10  # Reduced from 20
+            hours=6, platform="reddit", limit=20
         )
         for action in recent:
             if action.get("action_type") != "comment":

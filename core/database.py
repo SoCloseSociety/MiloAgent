@@ -15,7 +15,7 @@ from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-_CLEANUP_INTERVAL_HOURS = 6
+_CLEANUP_INTERVAL_HOURS = 3
 
 
 class Database:

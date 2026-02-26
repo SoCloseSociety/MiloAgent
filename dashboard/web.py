@@ -307,6 +307,7 @@ class WebDashboard:
     # ── Resource sampling loop ─────────────────────────────────
 
     def _sample_loop(self):
+        _cleanup_counter = 0
         while True:
             try:
                 cpu_pct = 0.0
@@ -326,6 +327,16 @@ class WebDashboard:
                 except Exception:
                     pass
                 self._resource_sampler.sample(cpu_pct, ram_pct, disk_pct)
+
+                # Periodic session cleanup (every ~60s)
+                _cleanup_counter += 1
+                if _cleanup_counter >= 12:
+                    _cleanup_counter = 0
+                    now = time.time()
+                    expired = [k for k, v in self._sessions.items()
+                               if now - v["created_at"] > self._session_ttl]
+                    for k in expired:
+                        del self._sessions[k]
             except Exception:
                 pass
             time.sleep(5)
@@ -1663,6 +1674,13 @@ class WebDashboard:
                 await ws.close(code=4001)
                 return
             await ws.accept()
+            # Cap WebSocket clients at 20
+            if len(self._ws_clients) >= 20:
+                oldest = self._ws_clients.pop(0)
+                try:
+                    await oldest.close()
+                except Exception:
+                    pass
             self._ws_clients.append(ws)
             last_seq = 0
             try:
