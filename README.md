@@ -193,7 +193,7 @@ Milo's most powerful feature: he rewrites his own prompts. By analyzing his top-
 ### Installation
 
 ```bash
-git clone https://github.com/SoClosee/MiloAgent.git
+git clone https://github.com/SoCloseSociety/MiloAgent.git
 cd MiloAgent
 
 python3 -m venv .venv
