@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/MiloAgent-v3.0-blueviolet?style=for-the-badge&logo=robot&logoColor=white" alt="MiloAgent v3.0"/>
+  <img src="https://raw.githubusercontent.com/SoCloseSociety/MiloAgent/main/assets/banner.svg" alt="MiloAgent — Autonomous AI Growth Agent" width="900">
 </p>
 
 <h1 align="center">Milo — Your AI Growth Agent</h1>

@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a1a;stop-opacity:1"/>
+      <stop offset="50%" style="stop-color:#1a0a2e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#0a0a1a;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7C3AED"/>
+      <stop offset="50%" style="stop-color:#A78BFA"/>
+      <stop offset="100%" style="stop-color:#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="brain" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#A78BFA"/>
+      <stop offset="100%" style="stop-color:#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="reddit" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF4500"/>
+      <stop offset="100%" style="stop-color:#CC3700"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softglow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="300" rx="16" fill="url(#bg)"/>
+
+  <!-- Neural network pattern -->
+  <g opacity="0.04">
+    <circle cx="100" cy="50" r="3" fill="#A78BFA"/>
+    <circle cx="200" cy="100" r="3" fill="#A78BFA"/>
+    <circle cx="150" cy="180" r="3" fill="#A78BFA"/>
+    <circle cx="300" cy="60" r="3" fill="#A78BFA"/>
+    <circle cx="250" cy="250" r="3" fill="#A78BFA"/>
+    <circle cx="700" cy="40" r="3" fill="#A78BFA"/>
+    <circle cx="750" cy="150" r="3" fill="#A78BFA"/>
+    <circle cx="800" cy="250" r="3" fill="#A78BFA"/>
+    <circle cx="650" cy="260" r="3" fill="#A78BFA"/>
+    <circle cx="850" cy="80" r="3" fill="#A78BFA"/>
+    <line x1="100" y1="50" x2="200" y2="100" stroke="#A78BFA" stroke-width="0.5"/>
+    <line x1="200" y1="100" x2="150" y2="180" stroke="#A78BFA" stroke-width="0.5"/>
+    <line x1="200" y1="100" x2="300" y2="60" stroke="#A78BFA" stroke-width="0.5"/>
+    <line x1="150" y1="180" x2="250" y2="250" stroke="#A78BFA" stroke-width="0.5"/>
+    <line x1="700" y1="40" x2="750" y2="150" stroke="#A78BFA" stroke-width="0.5"/>
+    <line x1="750" y1="150" x2="800" y2="250" stroke="#A78BFA" stroke-width="0.5"/>
+    <line x1="750" y1="150" x2="850" y2="80" stroke="#A78BFA" stroke-width="0.5"/>
+    <line x1="800" y1="250" x2="650" y2="260" stroke="#A78BFA" stroke-width="0.5"/>
+  </g>
+
+  <!-- Decorative orbs -->
+  <circle cx="130" cy="150" r="130" fill="#7C3AED" opacity="0.06"/>
+  <circle cx="780" cy="120" r="100" fill="#FF4500" opacity="0.04"/>
+
+  <!-- Top accent line -->
+  <rect x="0" y="0" width="900" height="3" rx="1.5" fill="url(#accent)"/>
+
+  <!-- Brain/AI icon -->
+  <g transform="translate(80, 80)" filter="url(#glow)">
+    <!-- Stylized brain outline -->
+    <circle cx="60" cy="60" r="55" fill="url(#brain)" opacity="0.15"/>
+    <circle cx="60" cy="60" r="55" fill="none" stroke="url(#brain)" stroke-width="2" opacity="0.6"/>
+    <!-- Inner brain pattern -->
+    <path d="M35 55 Q45 35 60 40 Q75 35 85 55" fill="none" stroke="#A78BFA" stroke-width="2" opacity="0.8"/>
+    <path d="M35 65 Q45 80 60 75 Q75 80 85 65" fill="none" stroke="#A78BFA" stroke-width="2" opacity="0.8"/>
+    <line x1="60" y1="35" x2="60" y2="85" stroke="#A78BFA" stroke-width="1.5" opacity="0.5"/>
+    <!-- Eye dots -->
+    <circle cx="45" cy="55" r="4" fill="#A78BFA" opacity="0.9"/>
+    <circle cx="75" cy="55" r="4" fill="#A78BFA" opacity="0.9"/>
+    <!-- Pulse indicator -->
+    <circle cx="60" cy="60" r="3" fill="#A78BFA">
+      <animate attributeName="r" values="3;8;3" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- Title: MiloAgent -->
+  <text x="260" y="115" font-family="system-ui, -apple-system, sans-serif" font-size="52" font-weight="800" fill="white" letter-spacing="-1">
+    <tspan fill="white">Milo</tspan><tspan fill="#A78BFA">Agent</tspan>
+  </text>
+
+  <!-- Subtitle -->
+  <text x="260" y="150" font-family="system-ui, -apple-system, sans-serif" font-size="18" fill="#a0a0c0" letter-spacing="0.5">Autonomous AI Growth Agent</text>
+
+  <!-- Description -->
+  <text x="260" y="190" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#7070a0">Self-learning &#183; Multi-platform &#183; Zero cost &#183; Docker ready</text>
+
+  <!-- Platform badges -->
+  <g transform="translate(260, 210)">
+    <!-- Reddit badge (expert) -->
+    <rect x="0" y="0" width="110" height="26" rx="4" fill="#FF4500" opacity="0.2"/>
+    <rect x="0" y="0" width="110" height="26" rx="4" fill="none" stroke="#FF4500" stroke-width="1" opacity="0.5"/>
+    <circle cx="16" cy="13" r="6" fill="#FF4500" opacity="0.8"/>
+    <text x="62" y="17" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#FF4500" font-weight="600">Reddit Expert</text>
+
+    <!-- Twitter badge (learning) -->
+    <rect x="120" y="0" width="120" height="26" rx="4" fill="#1DA1F2" opacity="0.15"/>
+    <rect x="120" y="0" width="120" height="26" rx="4" fill="none" stroke="#1DA1F2" stroke-width="1" opacity="0.3"/>
+    <text x="180" y="17" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#1DA1F2" font-weight="600">Twitter/X</text>
+
+    <!-- Telegram badge (learning) -->
+    <rect x="250" y="0" width="110" height="26" rx="4" fill="#26A5E4" opacity="0.15"/>
+    <rect x="250" y="0" width="110" height="26" rx="4" fill="none" stroke="#26A5E4" stroke-width="1" opacity="0.3"/>
+    <text x="305" y="17" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#26A5E4" font-weight="600">Telegram</text>
+  </g>
+
+  <!-- Right side: learning visualization -->
+  <g transform="translate(680, 70)">
+    <rect x="0" y="0" width="160" height="160" rx="12" fill="white" opacity="0.03"/>
+    <rect x="0" y="0" width="160" height="160" rx="12" fill="none" stroke="white" stroke-width="1" opacity="0.06"/>
+
+    <!-- Learning bars -->
+    <text x="80" y="30" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#7070a0" font-weight="500" letter-spacing="1.5">LEARNING</text>
+
+    <!-- Reddit bar (full) -->
+    <text x="15" y="60" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#FF4500">Reddit</text>
+    <rect x="15" y="66" width="130" height="6" rx="3" fill="white" opacity="0.08"/>
+    <rect x="15" y="66" width="130" height="6" rx="3" fill="#FF4500" opacity="0.8"/>
+
+    <!-- Twitter bar (growing) -->
+    <text x="15" y="95" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#1DA1F2">Twitter/X</text>
+    <rect x="15" y="101" width="130" height="6" rx="3" fill="white" opacity="0.08"/>
+    <rect x="15" y="101" width="65" height="6" rx="3" fill="#1DA1F2" opacity="0.6">
+      <animate attributeName="width" values="55;75;55" dur="4s" repeatCount="indefinite"/>
+    </rect>
+
+    <!-- Telegram bar (growing) -->
+    <text x="15" y="130" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#26A5E4">Telegram</text>
+    <rect x="15" y="136" width="130" height="6" rx="3" fill="white" opacity="0.08"/>
+    <rect x="15" y="136" width="50" height="6" rx="3" fill="#26A5E4" opacity="0.5">
+      <animate attributeName="width" values="40;60;40" dur="5s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+
+  <!-- Bottom accent line -->
+  <rect x="0" y="297" width="900" height="3" rx="1.5" fill="url(#accent)"/>
+
+  <!-- SoClose Society watermark -->
+  <text x="450" y="278" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#4a4a6a" letter-spacing="1">SoClose Society</text>
+</svg>
