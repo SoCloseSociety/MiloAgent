@@ -86,13 +86,22 @@ class SubredditHubManager:
         description: str = "",
         niche: str = "",
     ) -> bool:
-        """Register an owned subreddit as a hub."""
+        """Register an owned subreddit as a hub (safe upsert, preserves stats)."""
         try:
+            # Insert only if new — never overwrite existing stats/setup_complete
             self.db._execute_write(
-                """INSERT OR REPLACE INTO subreddit_hubs
+                """INSERT OR IGNORE INTO subreddit_hubs
                    (subreddit, project, created_by, description, niche)
                    VALUES (?, ?, ?, ?, ?)""",
                 (subreddit, project, created_by, description, niche),
+            )
+            # Always update created_by + description (e.g. config_sync → real username)
+            self.db._execute_write(
+                """UPDATE subreddit_hubs
+                   SET created_by = ?, description = COALESCE(NULLIF(?, ''), description),
+                       niche = COALESCE(NULLIF(?, ''), niche)
+                   WHERE subreddit = ?""",
+                (created_by, description, niche, subreddit),
             )
             logger.info(f"Registered hub r/{subreddit} for {project}")
             return True
