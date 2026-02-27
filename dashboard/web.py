@@ -978,6 +978,28 @@ class WebDashboard:
                 except Exception:
                     result["resources"] = {}
 
+                # Subreddit intel summary (fallback when top_subreddits empty)
+                try:
+                    intel_rows = self.orch.db.conn.execute(
+                        """SELECT subreddit, opportunity_score, subscribers, posts_per_day
+                           FROM subreddit_intel
+                           ORDER BY opportunity_score DESC LIMIT 10"""
+                    ).fetchall()
+                    result["subreddit_intel_summary"] = [dict(r) for r in intel_rows]
+                except Exception:
+                    result["subreddit_intel_summary"] = []
+
+                # Recent discoveries
+                try:
+                    disc_rows = self.orch.db.conn.execute(
+                        """SELECT discovery_type, value, score, status
+                           FROM discoveries
+                           ORDER BY timestamp DESC LIMIT 5"""
+                    ).fetchall()
+                    result["recent_discoveries"] = [dict(r) for r in disc_rows]
+                except Exception:
+                    result["recent_discoveries"] = []
+
             except Exception as e:
                 result["error"] = str(e)
             return result
@@ -1883,6 +1905,364 @@ class WebDashboard:
                         })
 
                 return {"nodes": nodes, "links": links}
+            except Exception as e:
+                return {"error": str(e), "nodes": [], "links": []}
+
+        # ══════════════════════════════════════════════════════
+        # INTELLIGENCE ENDPOINTS (v5.0)
+        # ══════════════════════════════════════════════════════
+
+        # ── GET /api/intel/subreddits ────────────────────────
+        @app.get("/api/intel/subreddits")
+        async def get_intel_subreddits(
+            project: str = Query(""),
+            limit: int = Query(30, le=100),
+            _=Depends(self._verify_token),
+        ):
+            """Subreddit intelligence data."""
+            try:
+                where = "WHERE project = ?" if project else ""
+                params = (project,) if project else ()
+                rows = self.orch.db.conn.execute(
+                    f"""SELECT subreddit, project, updated_at, subscribers,
+                               active_users, posts_per_day, avg_hours_between_posts,
+                               median_post_score, avg_comments_per_post, mod_count,
+                               opportunity_score, relevance_score, description
+                        FROM subreddit_intel {where}
+                        ORDER BY opportunity_score DESC LIMIT ?""",
+                    (*params, limit),
+                ).fetchall()
+                return {"subreddits": [dict(r) for r in rows], "count": len(rows)}
+            except Exception as e:
+                return {"error": str(e), "subreddits": [], "count": 0}
+
+        # ── GET /api/intel/trends ────────────────────────────
+        @app.get("/api/intel/trends")
+        async def get_intel_trends(
+            project: str = Query(""),
+            hours: int = Query(72, le=336),
+            _=Depends(self._verify_token),
+        ):
+            """Subreddit trend snapshots (themes, questions, hot posts)."""
+            try:
+                since = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+                where_parts = ["timestamp > ?"]
+                params: list = [since]
+                if project:
+                    where_parts.append("project = ?")
+                    params.append(project)
+                where = " AND ".join(where_parts)
+                rows = self.orch.db.conn.execute(
+                    f"""SELECT subreddit, project, timestamp, top_themes,
+                               recurring_questions, avg_score, hot_post_count
+                        FROM subreddit_trends
+                        WHERE {where}
+                        ORDER BY timestamp DESC LIMIT 100""",
+                    params,
+                ).fetchall()
+                result = []
+                for r in rows:
+                    d = dict(r)
+                    # Parse JSON fields
+                    for field in ("top_themes", "recurring_questions"):
+                        try:
+                            d[field] = json.loads(d[field]) if d[field] else []
+                        except (json.JSONDecodeError, TypeError):
+                            d[field] = []
+                    result.append(d)
+                return {"trends": result, "count": len(result)}
+            except Exception as e:
+                return {"error": str(e), "trends": [], "count": 0}
+
+        # ── GET /api/intel/knowledge ─────────────────────────
+        @app.get("/api/intel/knowledge")
+        async def get_intel_knowledge(
+            project: str = Query(""),
+            category: str = Query(""),
+            limit: int = Query(50, le=200),
+            _=Depends(self._verify_token),
+        ):
+            """Knowledge base entries (trends, news, talking points, strategy rules)."""
+            try:
+                where_parts = ["1=1"]
+                params: list = []
+                if project:
+                    where_parts.append("project = ?")
+                    params.append(project)
+                if category:
+                    where_parts.append("category = ?")
+                    params.append(category)
+                where = " AND ".join(where_parts)
+                rows = self.orch.db.conn.execute(
+                    f"""SELECT timestamp, project, category, topic, content,
+                               source, relevance_score, expires_at, used_count
+                        FROM knowledge_base
+                        WHERE {where}
+                        ORDER BY timestamp DESC LIMIT ?""",
+                    (*params, limit),
+                ).fetchall()
+                return {"entries": [dict(r) for r in rows], "count": len(rows)}
+            except Exception as e:
+                return {"error": str(e), "entries": [], "count": 0}
+
+        # ── GET /api/intel/discoveries ───────────────────────
+        @app.get("/api/intel/discoveries")
+        async def get_intel_discoveries(
+            project: str = Query(""),
+            status: str = Query(""),
+            limit: int = Query(30, le=100),
+            _=Depends(self._verify_token),
+        ):
+            """AI-discovered subreddits and keywords."""
+            try:
+                where_parts = ["1=1"]
+                params: list = []
+                if project:
+                    where_parts.append("project = ?")
+                    params.append(project)
+                if status:
+                    where_parts.append("status = ?")
+                    params.append(status)
+                where = " AND ".join(where_parts)
+                rows = self.orch.db.conn.execute(
+                    f"""SELECT timestamp, platform, project, discovery_type,
+                               value, source, score, status
+                        FROM discoveries
+                        WHERE {where}
+                        ORDER BY score DESC, timestamp DESC LIMIT ?""",
+                    (*params, limit),
+                ).fetchall()
+                return {"discoveries": [dict(r) for r in rows], "count": len(rows)}
+            except Exception as e:
+                return {"error": str(e), "discoveries": [], "count": 0}
+
+        # ── GET /api/intel/time-perf ─────────────────────────
+        @app.get("/api/intel/time-perf")
+        async def get_intel_time_perf(
+            project: str = Query(""),
+            _=Depends(self._verify_token),
+        ):
+            """Best posting times heatmap (7x24 grid)."""
+            try:
+                where = "WHERE project = ?" if project else ""
+                params = (project,) if project else ()
+                rows = self.orch.db.conn.execute(
+                    f"""SELECT hour_of_day, day_of_week,
+                               SUM(action_count) as actions,
+                               AVG(avg_engagement) as avg_eng,
+                               SUM(total_removed) as removed
+                        FROM time_performance {where}
+                        GROUP BY hour_of_day, day_of_week
+                        ORDER BY avg_eng DESC""",
+                    params,
+                ).fetchall()
+                grid = [dict(r) for r in rows]
+                max_eng = max((r["avg_eng"] for r in grid), default=0)
+                return {"grid": grid, "max_engagement": round(max_eng, 2)}
+            except Exception as e:
+                return {"error": str(e), "grid": [], "max_engagement": 0}
+
+        # ── GET /api/intel/failures ──────────────────────────
+        @app.get("/api/intel/failures")
+        async def get_intel_failures(
+            project: str = Query(""),
+            limit: int = Query(20, le=50),
+            _=Depends(self._verify_token),
+        ):
+            """Content failure patterns and avoidance rules."""
+            try:
+                where = "WHERE project = ?" if project else ""
+                params = (project,) if project else ()
+                rows = self.orch.db.conn.execute(
+                    f"""SELECT project, subreddit, failure_type, pattern,
+                               frequency, last_seen, avoidance_rule
+                        FROM failure_patterns {where}
+                        ORDER BY frequency DESC, last_seen DESC LIMIT ?""",
+                    (*params, limit),
+                ).fetchall()
+                return {"failures": [dict(r) for r in rows], "count": len(rows)}
+            except Exception as e:
+                return {"error": str(e), "failures": [], "count": 0}
+
+        # ── GET /api/intel/sentiment ─────────────────────────
+        @app.get("/api/intel/sentiment")
+        async def get_intel_sentiment(
+            project: str = Query(""),
+            days: int = Query(30, le=90),
+            _=Depends(self._verify_token),
+        ):
+            """Reply sentiment aggregated by subreddit and tone."""
+            try:
+                since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+                where_parts = ["timestamp > ?"]
+                params: list = [since]
+                if project:
+                    where_parts.append("project = ?")
+                    params.append(project)
+                where = " AND ".join(where_parts)
+                # By subreddit
+                by_sub = self.orch.db.conn.execute(
+                    f"""SELECT subreddit,
+                               AVG(sentiment_score) as avg_sentiment,
+                               SUM(reply_count_analyzed) as total_replies,
+                               GROUP_CONCAT(DISTINCT positive_signals) as pos,
+                               GROUP_CONCAT(DISTINCT negative_signals) as neg
+                        FROM reply_sentiment
+                        WHERE {where}
+                        GROUP BY subreddit
+                        ORDER BY total_replies DESC LIMIT 20""",
+                    params,
+                ).fetchall()
+                # By tone
+                by_tone = self.orch.db.conn.execute(
+                    f"""SELECT tone_style,
+                               AVG(sentiment_score) as avg_sentiment,
+                               SUM(reply_count_analyzed) as total_replies
+                        FROM reply_sentiment
+                        WHERE {where}
+                        GROUP BY tone_style
+                        ORDER BY total_replies DESC""",
+                    params,
+                ).fetchall()
+                return {
+                    "by_subreddit": [dict(r) for r in by_sub],
+                    "by_tone": [dict(r) for r in by_tone],
+                }
+            except Exception as e:
+                return {"error": str(e), "by_subreddit": [], "by_tone": []}
+
+        # ── GET /api/intel/radar ─────────────────────────────
+        @app.get("/api/intel/radar")
+        async def get_intel_radar(
+            project: str = Query(""),
+            _=Depends(self._verify_token),
+        ):
+            """Composite radar data for the Topic Universe visualization."""
+            try:
+                result: Dict[str, Any] = {"nodes": [], "links": []}
+                node_map: Dict[str, dict] = {}
+
+                # 1. Top subreddits by opportunity_score
+                where = "WHERE project = ?" if project else ""
+                params = (project,) if project else ()
+                intel_rows = self.orch.db.conn.execute(
+                    f"""SELECT subreddit, opportunity_score, subscribers,
+                               posts_per_day, active_users, mod_count,
+                               relevance_score, description
+                        FROM subreddit_intel {where}
+                        ORDER BY opportunity_score DESC LIMIT 15""",
+                    params,
+                ).fetchall()
+                for r in intel_rows:
+                    nid = f"sub_{r['subreddit']}"
+                    node_map[nid] = {
+                        "id": nid,
+                        "type": "subreddit",
+                        "label": f"r/{r['subreddit']}",
+                        "score": round(r["opportunity_score"], 1),
+                        "subscribers": r["subscribers"],
+                        "posts_per_day": round(r["posts_per_day"], 1),
+                        "active_users": r["active_users"],
+                        "description": (r["description"] or "")[:120],
+                    }
+
+                # 2. Themes from subreddit_trends (aggregate across subs)
+                since_trends = (datetime.utcnow() - timedelta(hours=72)).isoformat()
+                trend_rows = self.orch.db.conn.execute(
+                    """SELECT subreddit, top_themes FROM subreddit_trends
+                       WHERE timestamp > ? ORDER BY timestamp DESC LIMIT 50""",
+                    (since_trends,),
+                ).fetchall()
+                theme_counts: Dict[str, list] = {}  # theme -> [subreddits]
+                for r in trend_rows:
+                    sub = r["subreddit"]
+                    try:
+                        themes = json.loads(r["top_themes"]) if r["top_themes"] else []
+                    except (json.JSONDecodeError, TypeError):
+                        themes = []
+                    for theme in themes[:3]:
+                        t = theme.strip().lower()
+                        if t:
+                            theme_counts.setdefault(t, [])
+                            if sub not in theme_counts[t]:
+                                theme_counts[t].append(sub)
+                # Top 10 themes
+                sorted_themes = sorted(theme_counts.items(), key=lambda x: len(x[1]), reverse=True)[:10]
+                for theme, subs_list in sorted_themes:
+                    nid = f"theme_{theme[:30]}"
+                    node_map[nid] = {
+                        "id": nid,
+                        "type": "theme",
+                        "label": theme[:40],
+                        "frequency": len(subs_list),
+                        "subreddits": subs_list[:5],
+                    }
+                    # Links to subreddits
+                    for sub in subs_list[:5]:
+                        sub_nid = f"sub_{sub}"
+                        if sub_nid in node_map:
+                            result["links"].append({"source": sub_nid, "target": nid, "value": 1})
+
+                # 3. Fresh news/talking_points from knowledge_base
+                since_kb = (datetime.utcnow() - timedelta(hours=72)).isoformat()
+                kb_rows = self.orch.db.conn.execute(
+                    """SELECT category, topic, content, source, relevance_score, timestamp
+                       FROM knowledge_base
+                       WHERE category IN ('news','talking_point')
+                       AND timestamp > ?
+                       ORDER BY relevance_score DESC, timestamp DESC LIMIT 8""",
+                    (since_kb,),
+                ).fetchall()
+                for r in kb_rows:
+                    nid = f"news_{r['topic'][:25]}_{r['timestamp'][-5:]}"
+                    node_map[nid] = {
+                        "id": nid,
+                        "type": "news" if r["category"] == "news" else "talking_point",
+                        "label": r["topic"][:50],
+                        "content": (r["content"] or "")[:150],
+                        "source": r["source"] or "",
+                        "score": round(r["relevance_score"], 1),
+                        "fresh": r["timestamp"],
+                    }
+
+                # 4. Discoveries (candidates)
+                disc_rows = self.orch.db.conn.execute(
+                    """SELECT discovery_type, value, score, source, status
+                       FROM discoveries
+                       WHERE status = 'candidate'
+                       ORDER BY score DESC LIMIT 8""",
+                ).fetchall()
+                for r in disc_rows:
+                    nid = f"disc_{r['discovery_type']}_{r['value'][:20]}"
+                    node_map[nid] = {
+                        "id": nid,
+                        "type": "discovery",
+                        "label": r["value"],
+                        "discovery_type": r["discovery_type"],
+                        "score": round(r["score"], 1),
+                        "source": r["source"] or "",
+                    }
+
+                # 5. Top keywords by learned weight
+                kw_rows = self.orch.db.conn.execute(
+                    """SELECT key, weight, avg_engagement, sample_count
+                       FROM learned_weights
+                       WHERE category = 'keyword'
+                       ORDER BY weight DESC LIMIT 8""",
+                ).fetchall()
+                for r in kw_rows:
+                    nid = f"kw_{r['key'][:25]}"
+                    node_map[nid] = {
+                        "id": nid,
+                        "type": "keyword",
+                        "label": r["key"],
+                        "weight": round(r["weight"], 2),
+                        "engagement": round(r["avg_engagement"], 1),
+                        "samples": r["sample_count"],
+                    }
+
+                result["nodes"] = list(node_map.values())
+                return result
             except Exception as e:
                 return {"error": str(e), "nodes": [], "links": []}
 

@@ -467,10 +467,19 @@ function renderBrain(d) {
   let h = '';
   const row = (l,v,c) => `<div class="brain-row"><span class="label">${l}</span><span class="value" style="color:${c||'var(--text)'}">${v}</span></div>`;
   const subs = (d.top_subreddits||[]).slice(0,3).map(s => 'r/'+(s.name||s.subreddit||'?')).join(', ');
-  h += row('Top Subreddits', subs||'(learning...)', 'var(--neon-green)');
+  if (subs) {
+    h += row('Top Subreddits', subs, 'var(--neon-green)');
+  } else if (d.subreddit_intel_summary && d.subreddit_intel_summary.length) {
+    const intelSubs = d.subreddit_intel_summary.slice(0,3).map(s => 'r/'+s.subreddit+' ('+s.opportunity_score.toFixed(1)+')').join(', ');
+    h += row('Top Intel Targets', intelSubs, 'var(--neon-cyan)');
+  } else {
+    h += row('Top Subreddits', '(learning...)', 'var(--text3)');
+  }
   h += row('Promo Ratio', Math.round((d.promo_ratio||0.25)*100)+'% promo', 'var(--neon-cyan)');
   h += row('Best Tone', d.best_tone||'N/A', 'var(--text)');
-  h += row('Discoveries', (d.discoveries||0)+' pending', d.discoveries>0?'var(--yellow)':'var(--text3)');
+  const discCount = d.discoveries||0;
+  const discDetail = (d.recent_discoveries||[]).slice(0,3).map(x => x.value).join(', ');
+  h += row('Discoveries', discCount+' pending'+(discDetail?' — '+discDetail:''), discCount>0?'var(--yellow)':'var(--text3)');
   const pt = (d.post_type_top||[]).map(p => p.type+'('+p.avg_eng+')').join(', ');
   h += row('Top Posts', pt||'-', 'var(--neon-cyan)');
   const sent = d.sentiment||{};
@@ -563,7 +572,7 @@ function renderInsights(d) {
     const pct = Math.round(d.optimal_promo_ratio*100);
     h += `<div style="margin-top:8px"><span style="font-family:var(--font-label);font-size:10px;color:var(--text3);text-transform:uppercase">Promo Ratio: </span><span class="insight-tag">${pct}% promo / ${100-pct}% organic</span></div>`;
   }
-  el.innerHTML = h || '<p class="no-data">No insights yet — agent is learning</p>';
+  el.innerHTML = h || '<p class="no-data">Learning in progress — need 3+ samples per subreddit before insights appear</p>';
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -572,7 +581,8 @@ function renderInsights(d) {
 function renderOpps(d) {
   const el = document.getElementById('oppsList');
   if (!el) return;
-  if (d.error||!d||!d.length) { el.innerHTML='<p class="no-data">No pending opportunities</p>'; return; }
+  if (!d||d.error) { el.innerHTML=`<p class="no-data">${d&&d.error?esc(d.error):'No pending opportunities'}</p>`; return; }
+  if (!d.length) { el.innerHTML='<p class="no-data">No pending opportunities</p>'; return; }
   el.innerHTML = d.slice(0,25).map(o => {
     const sc = o.score||o.relevance_score||0;
     const c = sc>=7?'var(--neon-green)':sc>=4?'var(--yellow)':'var(--text3)';
@@ -594,7 +604,7 @@ function renderDecisionLog(d) {
     const dtype = (dec.decision_type||dec.type||'').toLowerCase();
     const badgeClass = dtype.includes('select')?'selected':dtype.includes('reject')?'rejected':dtype.includes('rate')?'rate_limited':dtype.includes('dedup')?'dedup':dtype.includes('resource')?'resource_low':'rejected';
     const details = dec.details||dec.reasoning||dec.reason||'';
-    const target = dec.target||dec.subreddit||'';
+    const target = dec.target_id||dec.target||'';
     return `<div class="decision-item"><span class="dec-time">${esc(ts)}</span><span class="dec-badge ${badgeClass}">${esc(dtype)}</span><span class="dec-text">${esc(details).substring(0,120)}</span><span class="dec-target">${esc(target)}</span></div>`;
   }).join('');
 }
@@ -1170,6 +1180,355 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// RADAR — Topic Universe (D3.js Force Graph)
+// ══════════════════════════════════════════════════════════════
+let _radarSim = null;
+let _radarData = null;
+let _radarFilter = 'all';
+
+function renderRadar(data) {
+  const container = document.getElementById('radarUniverse');
+  if (!container || !data || !data.nodes) return;
+  _radarData = data;
+  const countEl = document.getElementById('radarNodeCount');
+  if (countEl) countEl.textContent = data.nodes.length;
+
+  if (!_d3Loaded) { loadD3().then(() => _drawRadar(container, data)); return; }
+  _drawRadar(container, data);
+}
+
+function _drawRadar(container, data) {
+  if (typeof d3 === 'undefined') return;
+  container.innerHTML = '';
+  const w = container.clientWidth || 900;
+  const h = Math.max(container.clientHeight, 600);
+
+  const svg = d3.select(container).append('svg')
+    .attr('width', w).attr('height', h)
+    .style('background', 'transparent');
+
+  // Glow filter
+  const defs = svg.append('defs');
+  const filter = defs.append('filter').attr('id', 'radarGlow');
+  filter.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'blur');
+  const merge = filter.append('feMerge');
+  merge.append('feMergeNode').attr('in', 'blur');
+  merge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  const g = svg.append('g');
+  svg.call(d3.zoom().scaleExtent([0.3, 4]).on('zoom', (e) => g.attr('transform', e.transform)));
+
+  const typeColors = {
+    subreddit: '#00f0ff', theme: '#ff6b35', keyword: '#22ff88',
+    news: '#a855f7', talking_point: '#a855f7', discovery: '#fbbf24',
+  };
+  const typeRadius = (n) => {
+    if (n.type === 'subreddit') return Math.max(8, Math.min(30, Math.log10((n.subscribers||1000)+1)*6));
+    if (n.type === 'theme') return Math.max(6, Math.min(22, (n.frequency||1)*4));
+    if (n.type === 'keyword') return Math.max(6, Math.min(20, (n.weight||1)*6));
+    if (n.type === 'discovery') return Math.max(6, Math.min(18, (n.score||1)*3));
+    return 8;
+  };
+  const typeShape = (sel) => {
+    sel.each(function(d) {
+      const el = d3.select(this);
+      const r = typeRadius(d);
+      const c = typeColors[d.type] || '#888';
+      if (d.type === 'theme') {
+        // Hexagon
+        const pts = Array.from({length:6}, (_,i) => {
+          const a = Math.PI/3*i - Math.PI/6;
+          return [r*Math.cos(a), r*Math.sin(a)].join(',');
+        }).join(' ');
+        el.append('polygon').attr('points', pts).attr('fill', c).attr('opacity', 0.8).attr('filter', 'url(#radarGlow)');
+      } else if (d.type === 'keyword') {
+        // Diamond
+        el.append('polygon').attr('points', `0,${-r} ${r*0.7},0 0,${r} ${-r*0.7},0`).attr('fill', c).attr('opacity', 0.8).attr('filter', 'url(#radarGlow)');
+      } else if (d.type === 'discovery') {
+        // Star
+        const pts = Array.from({length:10}, (_,i) => {
+          const a = Math.PI/5*i - Math.PI/2;
+          const rad = i%2===0 ? r : r*0.5;
+          return [rad*Math.cos(a), rad*Math.sin(a)].join(',');
+        }).join(' ');
+        el.append('polygon').attr('points', pts).attr('fill', c).attr('opacity', 0.9).attr('filter', 'url(#radarGlow)');
+      } else {
+        // Circle (subreddit, news)
+        el.append('circle').attr('r', r).attr('fill', c).attr('opacity', d.type==='subreddit' ? Math.max(0.4, Math.min(1, (d.score||5)/10)) : 0.7).attr('filter', 'url(#radarGlow)');
+      }
+      // Label
+      el.append('text').text(d.label||'').attr('dy', r+12).attr('text-anchor', 'middle')
+        .style('fill', '#ccc').style('font-size', '9px').style('font-family', 'var(--font-data)')
+        .style('pointer-events', 'none');
+    });
+  };
+
+  // Filter nodes
+  let nodes = data.nodes;
+  let links = data.links || [];
+  if (_radarFilter !== 'all') {
+    const types = _radarFilter === 'news' ? ['news','talking_point'] : [_radarFilter];
+    const nodeIds = new Set(nodes.filter(n => types.includes(n.type)).map(n => n.id));
+    // Also keep linked subreddits
+    links.forEach(l => { if (nodeIds.has(l.source?.id||l.source) || nodeIds.has(l.target?.id||l.target)) { nodeIds.add(l.source?.id||l.source); nodeIds.add(l.target?.id||l.target); }});
+    nodes = nodes.filter(n => nodeIds.has(n.id));
+    links = links.filter(l => nodeIds.has(l.source?.id||l.source) && nodeIds.has(l.target?.id||l.target));
+  }
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(80))
+    .force('charge', d3.forceManyBody().strength(-200))
+    .force('center', d3.forceCenter(w/2, h/2))
+    .force('collision', d3.forceCollide().radius(d => typeRadius(d)+5));
+
+  const link = g.append('g').selectAll('line').data(links).join('line')
+    .attr('stroke', 'rgba(0,240,255,0.15)').attr('stroke-width', d => d.value||1);
+
+  const node = g.append('g').selectAll('g').data(nodes).join('g')
+    .call(d3.drag().on('start', (e,d) => { if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag', (e,d) => { d.fx=e.x; d.fy=e.y; })
+      .on('end', (e,d) => { if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+  typeShape(node);
+
+  // Tooltip on hover
+  const tooltip = d3.select(container).append('div').attr('class', 'radar-tooltip').style('display', 'none');
+  node.on('mouseover', (e, d) => {
+    let html = `<strong style="color:${typeColors[d.type]||'#fff'}">${esc(d.label||'')}</strong><br><span style="font-size:10px;color:#888">${d.type}</span>`;
+    if (d.score !== undefined) html += `<br>Score: <strong>${d.score}</strong>`;
+    if (d.subscribers) html += `<br>Subs: ${d.subscribers.toLocaleString()}`;
+    if (d.frequency) html += `<br>Frequency: ${d.frequency}`;
+    if (d.weight) html += `<br>Weight: ${d.weight}`;
+    if (d.content) html += `<br><span style="color:#aaa;font-size:10px">${esc(d.content.substring(0,100))}</span>`;
+    tooltip.html(html).style('display', 'block')
+      .style('left', (e.offsetX+15)+'px').style('top', (e.offsetY-10)+'px');
+  }).on('mouseout', () => tooltip.style('display', 'none'))
+  .on('click', (e, d) => openRadarSidebar(d));
+
+  sim.on('tick', () => {
+    link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+  _radarSim = sim;
+}
+
+function filterRadar(type) {
+  _radarFilter = type;
+  document.querySelectorAll('.radar-controls .btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  if (_radarData) {
+    const container = document.getElementById('radarUniverse');
+    if (container) _drawRadar(container, _radarData);
+  }
+}
+
+function openRadarSidebar(d) {
+  const sidebar = document.getElementById('radarSidebar');
+  const content = document.getElementById('radarSidebarContent');
+  if (!sidebar || !content) return;
+  const typeColors = { subreddit:'#00f0ff', theme:'#ff6b35', keyword:'#22ff88', news:'#a855f7', talking_point:'#a855f7', discovery:'#fbbf24' };
+  let h = `<div style="margin-bottom:12px;font-size:11px;color:${typeColors[d.type]||'#888'};text-transform:uppercase;letter-spacing:1px;font-family:var(--font-label)">${d.type}</div>`;
+  h += `<h3 style="margin:0 0 12px;color:var(--text);font-family:var(--font-title)">${esc(d.label||'')}</h3>`;
+  if (d.description) h += `<p style="color:var(--text2);font-size:12px;margin-bottom:12px">${esc(d.description)}</p>`;
+  if (d.content) h += `<p style="color:var(--text2);font-size:12px;margin-bottom:12px">${esc(d.content)}</p>`;
+  const stat = (l,v,c) => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text3);font-size:11px">${l}</span><span style="color:${c||'var(--text)'};font-family:var(--font-data);font-size:12px;font-weight:600">${v}</span></div>`;
+  if (d.score !== undefined) h += stat('Score', d.score, d.score>=7?'var(--neon-green)':d.score>=4?'var(--yellow)':'var(--text)');
+  if (d.subscribers) h += stat('Subscribers', d.subscribers.toLocaleString(), 'var(--neon-cyan)');
+  if (d.active_users) h += stat('Active Users', d.active_users.toLocaleString(), 'var(--neon-green)');
+  if (d.posts_per_day) h += stat('Posts/Day', d.posts_per_day, 'var(--text)');
+  if (d.frequency) h += stat('Frequency', d.frequency+' subs', 'var(--neon-orange)');
+  if (d.subreddits) h += stat('Found In', d.subreddits.map(s=>'r/'+s).join(', '), 'var(--neon-cyan)');
+  if (d.weight) h += stat('Weight', d.weight, 'var(--neon-green)');
+  if (d.engagement) h += stat('Avg Engagement', d.engagement, 'var(--neon-cyan)');
+  if (d.samples) h += stat('Samples', d.samples, 'var(--text3)');
+  if (d.discovery_type) h += stat('Type', d.discovery_type, 'var(--yellow)');
+  if (d.source) h += stat('Source', d.source, 'var(--text3)');
+  if (d.fresh) h += stat('Updated', _timeAgo(d.fresh), 'var(--text3)');
+  content.innerHTML = h;
+  sidebar.style.display = 'block';
+}
+
+function closeRadarSidebar() {
+  const sidebar = document.getElementById('radarSidebar');
+  if (sidebar) sidebar.style.display = 'none';
+}
+
+function _timeAgo(ts) {
+  if (!ts) return '';
+  const d = new Date(ts.replace(' ', 'T')+'Z');
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60)+'m ago';
+  if (diff < 86400) return Math.floor(diff/3600)+'h ago';
+  return Math.floor(diff/86400)+'d ago';
+}
+
+// ══════════════════════════════════════════════════════════════
+// INTEL: Trending Feed
+// ══════════════════════════════════════════════════════════════
+function renderTrendingFeed(data) {
+  const el = document.getElementById('trendingFeed');
+  const countEl = document.getElementById('trendingCount');
+  if (!el) return;
+  const trends = data.trends || [];
+  if (countEl) countEl.textContent = trends.length;
+  if (!trends.length) { el.innerHTML='<p class="no-data">No trend data yet — research job runs every 12h</p>'; return; }
+  el.innerHTML = trends.slice(0, 30).map(t => {
+    const themes = (t.top_themes||[]).slice(0,3).map(th => `<span class="intel-tag theme">${esc(th)}</span>`).join('');
+    const questions = (t.recurring_questions||[]).slice(0,2).map(q => `<span class="intel-question">${esc(q)}</span>`).join('');
+    const hot = (t.hot_post_count||0) > 10 ? '<span class="intel-tag hot">HOT</span>' : '';
+    const ago = _timeAgo(t.timestamp);
+    return `<div class="trending-item">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-weight:600;color:var(--neon-cyan);font-family:var(--font-data)">r/${esc(t.subreddit)}</span>
+        <span style="font-size:10px;color:var(--text3)">${ago} ${hot}</span>
+      </div>
+      <div style="margin-bottom:4px">${themes}</div>
+      ${questions?`<div style="font-style:italic;font-size:11px;color:var(--text2)">${questions}</div>`:''}
+      <div style="font-size:10px;color:var(--text3)">Score: ${(t.avg_score||0).toFixed(1)} | ${t.hot_post_count||0} hot posts</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// INTEL: Knowledge Base
+// ══════════════════════════════════════════════════════════════
+let _knowledgeData = [];
+let _knowledgeFilter = 'all';
+
+function renderKnowledgeBase(data) {
+  const countEl = document.getElementById('knowledgeCount');
+  _knowledgeData = data.entries || [];
+  if (countEl) countEl.textContent = _knowledgeData.length;
+  _renderKnowledgeFiltered();
+}
+
+function filterKnowledge(cat) {
+  _knowledgeFilter = cat;
+  const btns = document.querySelectorAll('.intel-filters .btn');
+  btns.forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  _renderKnowledgeFiltered();
+}
+
+function _renderKnowledgeFiltered() {
+  const el = document.getElementById('knowledgeBase');
+  if (!el) return;
+  let items = _knowledgeData;
+  if (_knowledgeFilter !== 'all') items = items.filter(e => e.category === _knowledgeFilter);
+  if (!items.length) { el.innerHTML=`<p class="no-data">No ${_knowledgeFilter==='all'?'':_knowledgeFilter+' '}entries yet</p>`; return; }
+  const catColors = { trend:'var(--neon-cyan)', news:'var(--neon-purple)', talking_point:'var(--neon-orange)', strategy_rule:'var(--neon-green)' };
+  el.innerHTML = items.slice(0, 40).map(e => {
+    const ago = _timeAgo(e.timestamp);
+    const rel = Math.round((e.relevance_score||0)*100);
+    const cc = catColors[e.category]||'var(--text3)';
+    return `<div class="knowledge-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span class="intel-tag" style="background:${cc}20;color:${cc}">${esc(e.category)}</span>
+        <span style="font-size:10px;color:var(--text3)">${ago}</span>
+      </div>
+      <div style="font-weight:600;font-size:12px;color:var(--text);margin-bottom:4px">${esc(e.topic)}</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.4">${esc((e.content||'').substring(0,200))}</div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--text3)">
+        <span>${esc(e.source||'')}</span>
+        <span>Relevance: ${rel}%${e.used_count>0?' | Used: '+e.used_count+'x':''}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// INTEL: Discoveries
+// ══════════════════════════════════════════════════════════════
+function renderDiscoveriesList(data) {
+  const el = document.getElementById('discoveriesList');
+  const countEl = document.getElementById('discoveriesCount');
+  if (!el) return;
+  const items = data.discoveries || [];
+  if (countEl) countEl.textContent = items.length;
+  if (!items.length) { el.innerHTML='<p class="no-data">No discoveries yet — AI proposes new targets every 6h</p>'; return; }
+  el.innerHTML = items.map(d => {
+    const statusColors = { candidate:'var(--yellow)', approved:'var(--neon-green)', rejected:'var(--red)' };
+    const sc = (d.score||0).toFixed(1);
+    const scColor = d.score>=7?'var(--neon-green)':d.score>=4?'var(--yellow)':'var(--text3)';
+    return `<div class="discovery-item">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="color:${scColor};font-family:var(--font-data);font-weight:700;min-width:28px">${sc}</span>
+        <span class="intel-tag" style="background:${statusColors[d.status]||'var(--text3)'}20;color:${statusColors[d.status]||'var(--text3)'}">${esc(d.status)}</span>
+        <span class="intel-tag" style="background:var(--bg2);color:var(--text3)">${esc(d.discovery_type)}</span>
+        <span style="font-weight:600;color:var(--text)">${esc(d.value)}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">${esc(d.source||'')} | ${_timeAgo(d.timestamp)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// INTEL: Failure Patterns
+// ══════════════════════════════════════════════════════════════
+function renderFailurePatterns(data) {
+  const el = document.getElementById('failuresList');
+  const countEl = document.getElementById('failuresCount');
+  if (!el) return;
+  const items = data.failures || [];
+  if (countEl) countEl.textContent = items.length;
+  if (!items.length) { el.innerHTML='<p class="no-data">No failure patterns detected yet</p>'; return; }
+  el.innerHTML = items.map(f => {
+    return `<div class="failure-card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-weight:600;color:var(--red)">${esc(f.failure_type)}</span>
+        <span style="font-size:10px;color:var(--text3)">r/${esc(f.subreddit)} | x${f.frequency||1}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">${esc(f.pattern)}</div>
+      ${f.avoidance_rule?`<blockquote style="margin:0;padding:6px 10px;border-left:2px solid var(--neon-green);font-size:11px;color:var(--neon-green);font-style:italic">${esc(f.avoidance_rule)}</blockquote>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// INTEL: Sentiment Map
+// ══════════════════════════════════════════════════════════════
+function renderSentimentMap(data) {
+  const el = document.getElementById('sentimentMap');
+  if (!el) return;
+  const bySub = data.by_subreddit || [];
+  const byTone = data.by_tone || [];
+  if (!bySub.length && !byTone.length) { el.innerHTML='<p class="no-data">No sentiment data yet — replies analyzed after comment verification</p>'; return; }
+  let h = '';
+  if (bySub.length) {
+    h += '<div style="font-family:var(--font-label);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">By Subreddit</div>';
+    const maxReplies = Math.max(...bySub.map(s => s.total_replies||1));
+    bySub.forEach(s => {
+      const avg = s.avg_sentiment||0;
+      const pct = Math.round(Math.abs(avg)*100);
+      const color = avg > 0.1 ? 'var(--neon-green)' : avg < -0.1 ? 'var(--red)' : 'var(--yellow)';
+      const barW = Math.round((s.total_replies||0)/maxReplies*100);
+      h += `<div class="sentiment-row">
+        <span style="min-width:100px;font-family:var(--font-data);font-size:11px">r/${esc(s.subreddit)}</span>
+        <div class="sentiment-bar-wrap">
+          <div class="sentiment-bar-fill" style="width:${barW}%;background:${color};opacity:0.3"></div>
+          <span style="position:relative;z-index:1;font-family:var(--font-data);font-size:11px;color:${color};font-weight:600">${avg>0?'+':''}${avg.toFixed(2)}</span>
+        </div>
+        <span style="font-size:10px;color:var(--text3)">${s.total_replies||0}r</span>
+      </div>`;
+    });
+  }
+  if (byTone.length) {
+    h += '<div style="font-family:var(--font-label);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin:12px 0 8px">By Tone</div>';
+    byTone.forEach(t => {
+      const avg = t.avg_sentiment||0;
+      const color = avg > 0.1 ? 'var(--neon-green)' : avg < -0.1 ? 'var(--red)' : 'var(--yellow)';
+      h += `<div class="sentiment-row">
+        <span style="min-width:100px;font-family:var(--font-data);font-size:11px">${esc(t.tone_style)}</span>
+        <span style="color:${color};font-family:var(--font-data);font-size:12px;font-weight:600">${avg>0?'+':''}${avg.toFixed(2)}</span>
+        <span style="font-size:10px;color:var(--text3)">${t.total_replies||0} replies</span>
+      </div>`;
+    });
+  }
+  el.innerHTML = h;
+}
+
+// ══════════════════════════════════════════════════════════════
 // REFRESH LOOP
 // ══════════════════════════════════════════════════════════════
 async function refresh() {
@@ -1200,15 +1559,25 @@ async function refresh() {
       if (convos.status==='fulfilled') renderConversations(convos.value);
     }
     else if (currentTab === 'intel') {
-      const [brain, perf, insights, opps, decisions] = await Promise.allSettled([
+      const [brain, perf, insights, opps, decisions, trends, knowledge, discoveries, failures, sentiment] = await Promise.allSettled([
         api('/api/brain'), api('/api/performance'), api('/api/insights'), api('/api/opportunities?limit=25'),
-        api('/api/decisions?hours=4&limit=40').catch(()=>[])
+        api('/api/decisions?hours=4&limit=40').catch(()=>[]),
+        api('/api/intel/trends').catch(()=>({trends:[]})),
+        api('/api/intel/knowledge').catch(()=>({entries:[]})),
+        api('/api/intel/discoveries').catch(()=>({discoveries:[]})),
+        api('/api/intel/failures').catch(()=>({failures:[]})),
+        api('/api/intel/sentiment').catch(()=>({by_subreddit:[],by_tone:[]}))
       ]);
       if (brain.status==='fulfilled') renderBrain(brain.value);
       if (perf.status==='fulfilled') renderPerformance(perf.value);
       if (insights.status==='fulfilled') renderInsights(insights.value);
       if (opps.status==='fulfilled') renderOpps(opps.value);
       if (decisions.status==='fulfilled') renderDecisionLog(decisions.value);
+      if (trends.status==='fulfilled') renderTrendingFeed(trends.value);
+      if (knowledge.status==='fulfilled') renderKnowledgeBase(knowledge.value);
+      if (discoveries.status==='fulfilled') renderDiscoveriesList(discoveries.value);
+      if (failures.status==='fulfilled') renderFailurePatterns(failures.value);
+      if (sentiment.status==='fulfilled') renderSentimentMap(sentiment.value);
     }
     else if (currentTab === 'communities') {
       const [comms, targets, requests] = await Promise.allSettled([
@@ -1234,6 +1603,10 @@ async function refresh() {
       const [server, schedule] = await Promise.allSettled([api('/api/server'), api('/api/schedule')]);
       if (server.status==='fulfilled') renderServer(server.value);
       if (schedule.status==='fulfilled') renderSchedule(schedule.value, 'scheduleListFull');
+    }
+    else if (currentTab === 'radar') {
+      const data = await api('/api/intel/radar').catch(()=>null);
+      if (data) renderRadar(data);
     }
     else if (currentTab === 'network') {
       const data = await api('/api/network').catch(()=>null);

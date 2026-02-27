@@ -123,6 +123,7 @@
     <div class="nav-tab active" data-tab="command" onclick="switchTab('command')"><span class="tab-icon">&#9678;</span>Command</div>
     <div class="nav-tab" data-tab="activity" onclick="switchTab('activity')"><span class="tab-icon">&#9632;</span>Activity</div>
     <div class="nav-tab" data-tab="intel" onclick="switchTab('intel')"><span class="tab-icon">&#9733;</span>Intelligence</div>
+    <div class="nav-tab" data-tab="radar" onclick="switchTab('radar')"><span class="tab-icon">&#9678;</span>Radar</div>
     <div class="nav-tab" data-tab="communities" onclick="switchTab('communities')"><span class="tab-icon">&#9673;</span>Communities</div>
     <div class="nav-tab" data-tab="manage" onclick="switchTab('manage')"><span class="tab-icon">&#9881;</span>Accounts</div>
     <div class="nav-tab" data-tab="network" onclick="switchTab('network')"><span class="tab-icon">&#9670;</span>Network</div>
@@ -225,6 +226,7 @@
   <!-- ═══════ TAB: Intelligence ═══════ -->
   <div id="tab-intel" class="tab-content">
     <div class="grid">
+      <!-- Row 1: Performance + Brain -->
       <div class="card glow-green">
         <h2>Performance Score</h2>
         <div id="perfPanel"></div>
@@ -233,18 +235,69 @@
         <h2>Agent Brain</h2>
         <div id="brainPanel"></div>
       </div>
-      <!-- AI Decision Log -->
-      <div class="card full glow-cyan">
-        <h2><span class="card-icon">&#9733;</span> AI Decision Log <span class="badge-count" id="decisionCount">0</span></h2>
-        <div id="decisionLog" class="feed" style="max-height:380px;overflow-y:auto"></div>
+      <!-- Row 2: Trending + Knowledge + Discoveries -->
+      <div class="card glow-cyan">
+        <h2><span class="card-icon">&#9632;</span> Trending Feed <span class="badge-count" id="trendingCount">0</span></h2>
+        <div id="trendingFeed" class="feed" style="max-height:320px;overflow-y:auto"></div>
       </div>
       <div class="card glow-blue">
+        <h2><span class="card-icon">&#9679;</span> Knowledge Base <span class="badge-count" id="knowledgeCount">0</span></h2>
+        <div class="intel-filters" style="margin-bottom:8px;display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn btn-xs active" onclick="filterKnowledge('all')">All</button>
+          <button class="btn btn-xs" onclick="filterKnowledge('trend')">Trends</button>
+          <button class="btn btn-xs" onclick="filterKnowledge('news')">News</button>
+          <button class="btn btn-xs" onclick="filterKnowledge('talking_point')">Talking Pts</button>
+          <button class="btn btn-xs" onclick="filterKnowledge('strategy_rule')">Strategy</button>
+        </div>
+        <div id="knowledgeBase" class="feed" style="max-height:280px;overflow-y:auto"></div>
+      </div>
+      <div class="card glow-orange">
+        <h2><span class="card-icon">&#9733;</span> AI Discoveries <span class="badge-count" id="discoveriesCount">0</span></h2>
+        <div id="discoveriesList" class="feed" style="max-height:320px;overflow-y:auto"></div>
+      </div>
+      <!-- Row 3: Decision Log + Failures + Sentiment -->
+      <div class="card full glow-cyan">
+        <h2><span class="card-icon">&#9733;</span> AI Decision Log <span class="badge-count" id="decisionCount">0</span></h2>
+        <div id="decisionLog" class="feed" style="max-height:320px;overflow-y:auto"></div>
+      </div>
+      <div class="card glow-purple">
         <h2>Intelligence Insights</h2>
         <div id="insightsPanel"></div>
       </div>
       <div class="card glow-orange">
         <h2>Top Opportunities</h2>
-        <div id="oppsList" class="feed" style="max-height:380px"></div>
+        <div id="oppsList" class="feed" style="max-height:320px"></div>
+      </div>
+      <!-- Row 4: Failures + Sentiment -->
+      <div class="card glow-red">
+        <h2><span class="card-icon">&#9888;</span> Failure Patterns <span class="badge-count" id="failuresCount">0</span></h2>
+        <div id="failuresList" class="feed" style="max-height:300px;overflow-y:auto"></div>
+      </div>
+      <div class="card glow-green">
+        <h2><span class="card-icon">&#9679;</span> Sentiment Map</h2>
+        <div id="sentimentMap" style="max-height:300px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB: Radar — Topic Universe ═══════ -->
+  <div id="tab-radar" class="tab-content">
+    <div class="radar-controls" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-sm active" onclick="filterRadar('all')">All</button>
+      <button class="btn btn-sm" onclick="filterRadar('subreddit')">Subreddits</button>
+      <button class="btn btn-sm" onclick="filterRadar('theme')">Trending</button>
+      <button class="btn btn-sm" onclick="filterRadar('keyword')">Keywords</button>
+      <button class="btn btn-sm" onclick="filterRadar('news')">News</button>
+      <button class="btn btn-sm" onclick="filterRadar('discovery')">Discoveries</button>
+      <span style="margin-left:auto;font-family:var(--font-data);font-size:11px;color:var(--text3)">Nodes: <span id="radarNodeCount">0</span></span>
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="card glow-cyan" style="flex:1;padding:0;overflow:hidden;position:relative">
+        <div id="radarUniverse" style="width:100%;min-height:600px;position:relative"></div>
+      </div>
+      <div id="radarSidebar" class="radar-sidebar" style="display:none">
+        <div class="radar-sidebar-close" onclick="closeRadarSidebar()">&times;</div>
+        <div id="radarSidebarContent"></div>
       </div>
     </div>
   </div>

@@ -410,6 +410,92 @@ select.form-input{cursor:pointer}
   .controls-grid{grid-template-columns:1fr}
 }
 
+/* ══════════════════════════════════════════════════════════════
+   v5.0 — Radar + Intelligence Extensions
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Radar Tab ── */
+.radar-controls .btn.active{background:var(--neon-cyan);color:var(--bg);box-shadow:0 0 12px rgba(0,240,255,.3)}
+.radar-sidebar{
+  width:320px;min-width:280px;max-width:380px;
+  background:var(--glass);border:1px solid var(--glass-border2);border-radius:12px;
+  padding:20px;backdrop-filter:blur(12px);
+  animation:slideInRight .3s var(--ease);
+  overflow-y:auto;max-height:calc(100vh - 200px);
+}
+.radar-sidebar-close{
+  position:absolute;top:8px;right:12px;cursor:pointer;font-size:20px;color:var(--text3);
+  transition:color .2s
+}
+.radar-sidebar-close:hover{color:var(--neon-cyan)}
+.radar-tooltip{
+  position:absolute;pointer-events:none;z-index:100;
+  background:var(--glass);border:1px solid var(--glass-border2);border-radius:8px;
+  padding:8px 12px;font-size:11px;color:var(--text);
+  backdrop-filter:blur(8px);max-width:260px;
+  box-shadow:0 4px 20px rgba(0,0,0,.5)
+}
+@keyframes slideInRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+/* ── Intel Tags & Cards ── */
+.intel-tag{
+  display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;
+  font-family:var(--font-data);font-weight:600;letter-spacing:.5px;text-transform:uppercase
+}
+.intel-tag.theme{background:rgba(255,107,53,.15);color:var(--neon-orange)}
+.intel-tag.hot{background:rgba(239,68,68,.2);color:var(--red);animation:pulse 1.5s ease infinite}
+.intel-question{
+  display:inline-block;font-size:11px;color:var(--text2);margin:2px 4px 2px 0;
+  padding:1px 6px;background:var(--bg2);border-radius:4px;font-style:italic
+}
+
+.trending-item{
+  padding:10px 12px;border-bottom:1px solid var(--border);
+  transition:background .2s var(--ease)
+}
+.trending-item:hover{background:var(--bg2)}
+.trending-item:last-child{border-bottom:none}
+
+.knowledge-card{
+  padding:10px 12px;border-bottom:1px solid var(--border);
+  transition:background .2s var(--ease)
+}
+.knowledge-card:hover{background:var(--bg2)}
+.knowledge-card:last-child{border-bottom:none}
+
+.discovery-item{
+  padding:8px 12px;border-bottom:1px solid var(--border);
+  transition:background .2s var(--ease)
+}
+.discovery-item:hover{background:var(--bg2)}
+.discovery-item:last-child{border-bottom:none}
+
+.failure-card{
+  padding:10px 12px;border-bottom:1px solid var(--border);
+  border-left:2px solid rgba(239,68,68,.3);
+  transition:background .2s var(--ease)
+}
+.failure-card:hover{background:rgba(239,68,68,.05)}
+.failure-card:last-child{border-bottom:none}
+
+.sentiment-row{
+  display:flex;align-items:center;gap:8px;
+  padding:4px 0;border-bottom:1px solid var(--border)
+}
+.sentiment-row:last-child{border-bottom:none}
+.sentiment-bar-wrap{
+  flex:1;position:relative;height:20px;background:var(--bg2);border-radius:4px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center
+}
+.sentiment-bar-fill{position:absolute;top:0;left:0;height:100%;border-radius:4px;transition:width .5s var(--ease)}
+
+/* ── Glow variants ── */
+.card.glow-red{border-color:rgba(239,68,68,.12);box-shadow:0 0 15px rgba(239,68,68,.06),inset 0 1px 0 rgba(239,68,68,.05)}
+
+/* ── Intel filters ── */
+.intel-filters .btn{font-size:10px;padding:2px 8px;border-radius:4px}
+.btn-xs{font-size:10px!important;padding:2px 8px!important;min-width:auto}
+
 /* ── Reduced Motion ── */
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
