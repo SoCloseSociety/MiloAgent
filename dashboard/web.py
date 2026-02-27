@@ -1731,6 +1731,161 @@ class WebDashboard:
             except Exception as e:
                 return {"error": str(e), "requests": []}
 
+        # ── GET /api/heatmap ──────────────────────────────
+        @app.get("/api/heatmap")
+        async def get_heatmap(
+            days: int = Query(28, le=90),
+            _=Depends(self._verify_token),
+        ):
+            """Activity heatmap: actions by day-of-week and hour."""
+            try:
+                since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+                rows = self.orch.db.conn.execute(
+                    """SELECT CAST(strftime('%w', timestamp) AS INT) as dow,
+                              CAST(strftime('%H', timestamp) AS INT) as hour,
+                              COUNT(*) as count
+                       FROM actions
+                       WHERE timestamp > ? AND success = 1
+                       GROUP BY dow, hour""",
+                    (since,),
+                ).fetchall()
+                grid = [dict(r) for r in rows]
+                max_count = max((r["count"] for r in grid), default=0)
+                return {"grid": grid, "max_count": max_count}
+            except Exception as e:
+                return {"error": str(e), "grid": [], "max_count": 0}
+
+        # ── GET /api/funnel ───────────────────────────────
+        @app.get("/api/funnel")
+        async def get_funnel(
+            hours: int = Query(24, le=168),
+            _=Depends(self._verify_token),
+        ):
+            """Opportunity funnel: discovered → pending → acted → success."""
+            try:
+                since = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+                # Total opportunities discovered
+                total_opps = self.orch.db.conn.execute(
+                    "SELECT COUNT(*) as c FROM opportunities WHERE timestamp > ?",
+                    (since,),
+                ).fetchone()["c"]
+                # Pending
+                pending = self.orch.db.conn.execute(
+                    "SELECT COUNT(*) as c FROM opportunities WHERE status='pending' AND timestamp > ?",
+                    (since,),
+                ).fetchone()["c"]
+                # Acted on (have matching actions)
+                acted = self.orch.db.conn.execute(
+                    "SELECT COUNT(*) as c FROM actions WHERE timestamp > ? AND success = 1",
+                    (since,),
+                ).fetchone()["c"]
+                # Successful engagements (actions with non-empty metadata hinting at success)
+                success = self.orch.db.conn.execute(
+                    """SELECT COUNT(*) as c FROM actions
+                       WHERE timestamp > ? AND success = 1
+                       AND action_type IN ('comment', 'post', 'seed_post', 'reply')""",
+                    (since,),
+                ).fetchone()["c"]
+                stages = [
+                    {"name": "Discovered", "count": total_opps},
+                    {"name": "Pending", "count": pending},
+                    {"name": "Actions", "count": acted},
+                    {"name": "Engagements", "count": success},
+                ]
+                conversion = round(success / total_opps, 4) if total_opps > 0 else 0
+                return {"stages": stages, "conversion_rate": conversion}
+            except Exception as e:
+                return {"error": str(e), "stages": [], "conversion_rate": 0}
+
+        # ── GET /api/network ──────────────────────────────
+        @app.get("/api/network")
+        async def get_network(_=Depends(self._verify_token)):
+            """Network graph: accounts, relationships, subreddits."""
+            try:
+                nodes = []
+                links = []
+                node_ids = set()
+
+                # 1. Our accounts as nodes
+                for platform in ("reddit", "telegram"):
+                    accs = self.orch.account_mgr.load_accounts(platform)
+                    for acc in accs:
+                        nid = f"acc_{platform}_{acc['username']}"
+                        if nid not in node_ids:
+                            node_ids.add(nid)
+                            nodes.append({
+                                "id": nid,
+                                "label": f"@{acc['username']}",
+                                "type": "account",
+                                "platform": platform,
+                            })
+
+                # 2. Relationships as nodes + links to accounts
+                rel_rows = self.orch.db.conn.execute(
+                    """SELECT username, our_account, platform, stage,
+                              trust_score, public_interactions
+                       FROM relationships
+                       WHERE is_blocked = 0
+                       ORDER BY last_interaction DESC LIMIT 150"""
+                ).fetchall()
+                for r in rel_rows:
+                    nid = f"rel_{r['platform']}_{r['username']}"
+                    if nid not in node_ids:
+                        node_ids.add(nid)
+                        nodes.append({
+                            "id": nid,
+                            "label": r["username"],
+                            "type": "relationship",
+                            "stage": r["stage"],
+                            "trust": r["trust_score"],
+                            "activity": r["public_interactions"],
+                        })
+                    acc_nid = f"acc_{r['platform']}_{r['our_account']}"
+                    if acc_nid in node_ids:
+                        links.append({
+                            "source": acc_nid,
+                            "target": nid,
+                            "value": min(4, max(1, r["public_interactions"] or 1)),
+                        })
+
+                # 3. Active subreddits as nodes + links to accounts
+                sub_rows = self.orch.db.conn.execute(
+                    """SELECT DISTINCT subreddit_or_query as sub, account, platform
+                       FROM (
+                           SELECT subreddit_or_query, account, platform
+                           FROM performance
+                           WHERE subreddit_or_query IS NOT NULL AND platform = 'reddit'
+                           UNION
+                           SELECT target_id as subreddit_or_query, account, platform
+                           FROM actions
+                           WHERE platform = 'reddit' AND success = 1
+                           AND target_id LIKE 'r/%'
+                           ORDER BY ROWID DESC LIMIT 300
+                       )
+                       LIMIT 80"""
+                ).fetchall()
+                for s in sub_rows:
+                    sub_name = s["sub"]
+                    nid = f"sub_{sub_name}"
+                    if nid not in node_ids:
+                        node_ids.add(nid)
+                        nodes.append({
+                            "id": nid,
+                            "label": sub_name if sub_name.startswith("r/") else f"r/{sub_name}",
+                            "type": "subreddit",
+                        })
+                    acc_nid = f"acc_{s['platform']}_{s['account']}"
+                    if acc_nid in node_ids:
+                        links.append({
+                            "source": acc_nid,
+                            "target": nid,
+                            "value": 1,
+                        })
+
+                return {"nodes": nodes, "links": links}
+            except Exception as e:
+                return {"error": str(e), "nodes": [], "links": []}
+
         # ── WebSocket /ws/logs ─────────────────────────────
         @app.websocket("/ws/logs")
         async def ws_logs(ws: WebSocket, token: str = Query("")):
