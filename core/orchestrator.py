@@ -1699,6 +1699,133 @@ class Orchestrator:
                     _pick(_COMMENT_CHECK_MSGS, n=verified, r=removed)
                 )
 
+        # ── Circuit Breaker: pause accounts with high removal rates ──
+        self._check_removal_circuit_breaker()
+
+    def _check_removal_circuit_breaker(self):
+        """Pause accounts whose comments are getting removed too often.
+
+        Checks each Reddit account's removal rate over the last 24h.
+        - >50% removed → 24h cooldown (critical, likely shadowbanned)
+        - >30% removed → 6h cooldown (warning, content too aggressive)
+        - >20% removed with 5+ comments → 2h cooldown + switch to organic only
+
+        Requires at least 3 verified comments to trigger (avoid false positives
+        from small sample size).
+        """
+        try:
+            accounts = self.account_mgr.load_accounts("reddit")
+            for acc in accounts:
+                username = acc["username"]
+                # Get all actions in last 24h for this account
+                recent = self.db.get_recent_actions(
+                    hours=24, platform="reddit", account=username, limit=50
+                )
+                comments = [a for a in recent if a.get("action_type") == "comment"]
+                if len(comments) < 3:
+                    continue  # Not enough data
+
+                # Count removals (success=0 with error containing "removed" or
+                # outcomes recorded as removed by _verify_comments)
+                total = len(comments)
+                removed_count = 0
+                for c in comments:
+                    meta_raw = c.get("metadata", "")
+                    if isinstance(meta_raw, str):
+                        try:
+                            meta = json.loads(meta_raw) if meta_raw else {}
+                        except (json.JSONDecodeError, TypeError):
+                            meta = {}
+                    else:
+                        meta = meta_raw or {}
+                    # Check if this comment was flagged as removed
+                    if meta.get("removed") or meta.get("was_removed"):
+                        removed_count += 1
+
+                # Also check outcomes table for removals
+                try:
+                    outcome_removals = self.db.conn.execute(
+                        """SELECT COUNT(*) FROM outcomes
+                           WHERE platform = 'reddit'
+                           AND was_removed = 1
+                           AND timestamp > datetime('now', '-24 hours')
+                           AND action_id IN (
+                               SELECT id FROM actions
+                               WHERE account = ? AND platform = 'reddit'
+                           )""",
+                        (username,),
+                    ).fetchone()[0]
+                    removed_count = max(removed_count, outcome_removals)
+                except Exception:
+                    pass
+
+                if total == 0:
+                    continue
+
+                removal_rate = removed_count / total
+
+                key = f"reddit:{username}"
+                current_status = self.account_mgr._statuses.get(key, "healthy")
+
+                if removal_rate > 0.50 and removed_count >= 3:
+                    # CRITICAL: >50% removed, likely shadowbanned or flagged
+                    cooldown_hours = 24
+                    self.account_mgr.mark_cooldown(
+                        "reddit", username, minutes=cooldown_hours * 60
+                    )
+                    msg = (
+                        f"CIRCUIT BREAKER: {username} paused {cooldown_hours}h — "
+                        f"{removed_count}/{total} comments removed "
+                        f"({removal_rate:.0%}) in 24h"
+                    )
+                    logger.error(msg)
+                    self._send_telegram_alert(msg)
+                    self.db.log_decision(
+                        "circuit_breaker", "reddit", "",
+                        username, "",
+                        details=msg, outcome="account_paused",
+                    )
+
+                elif removal_rate > 0.30 and removed_count >= 2:
+                    # WARNING: >30% removed, back off significantly
+                    cooldown_hours = 6
+                    self.account_mgr.mark_cooldown(
+                        "reddit", username, minutes=cooldown_hours * 60
+                    )
+                    msg = (
+                        f"Circuit breaker: {username} paused {cooldown_hours}h — "
+                        f"{removed_count}/{total} comments removed "
+                        f"({removal_rate:.0%}) in 24h"
+                    )
+                    logger.warning(msg)
+                    self._send_telegram_alert(msg)
+                    self.db.log_decision(
+                        "circuit_breaker", "reddit", "",
+                        username, "",
+                        details=msg, outcome="account_cooldown",
+                    )
+
+                elif removal_rate > 0.20 and total >= 5:
+                    # CAUTION: elevated removal rate, short cooldown
+                    if current_status != "cooldown":
+                        cooldown_hours = 2
+                        self.account_mgr.mark_cooldown(
+                            "reddit", username, minutes=cooldown_hours * 60
+                        )
+                        msg = (
+                            f"Circuit breaker (soft): {username} paused {cooldown_hours}h — "
+                            f"{removed_count}/{total} removed ({removal_rate:.0%})"
+                        )
+                        logger.warning(msg)
+                        self.db.log_decision(
+                            "circuit_breaker", "reddit", "",
+                            username, "",
+                            details=msg, outcome="soft_cooldown",
+                        )
+
+        except Exception as e:
+            logger.debug(f"Circuit breaker check failed: {e}")
+
     def _seed_content(self):
         """Create autonomous user-style posts in target subreddits.
 

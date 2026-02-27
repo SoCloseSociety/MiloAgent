@@ -6,9 +6,9 @@ bot:
   cost_mode: "zero"            # zero | standard
   active_hours: [4, 24]        # Bot active window (24h format)
   scan_interval_minutes: 8     # Scan frequency
-  action_interval_minutes: 1   # Min interval between actions (accounts rotate)
-  max_actions_per_hour: 30     # Total across all accounts
-  organic_promo_ratio: 0.70    # 70% organic, 30% promotional
+  action_interval_minutes: 3   # Min interval between actions (accounts rotate)
+  max_actions_per_hour: 12     # Total across all accounts
+  organic_promo_ratio: 0.92    # 92% organic, 8% promotional (trusted accounts only)
   log_level: "INFO"
 
 scheduling:
@@ -19,14 +19,14 @@ scheduling:
     active_hours: [8, 23]
   full:
     scan_interval_minutes: 10
-    action_interval_minutes: 2
-    max_actions_per_hour: 24
-    active_hours: [5, 24]
+    action_interval_minutes: 4
+    max_actions_per_hour: 10
+    active_hours: [6, 23]
   server:
-    scan_interval_minutes: 6
-    action_interval_minutes: 1
-    max_actions_per_hour: 35
-    active_hours: [4, 24]
+    scan_interval_minutes: 8
+    action_interval_minutes: 4
+    max_actions_per_hour: 10
+    active_hours: [6, 23]
 
 # Project priorities — adjust weights to control which project gets more attention
 # Keys must match your project filenames in projects/ (without .yaml)

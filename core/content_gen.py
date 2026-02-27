@@ -170,11 +170,11 @@ class ContentGenerator:
     def should_be_promotional(
         self, subreddit: str = "", project: str = "", stage: str = "new",
     ) -> bool:
-        """Stage-aware promotional decision.
+        """Stage-aware promotional decision — conservative to avoid bans.
 
         - new/warming: NEVER promotional (100% organic, build trust first)
-        - established: 5% promotional max
-        - trusted: Use normal organic_ratio
+        - established: 3% promotional max (was 5%)
+        - trusted: max 8% promotional (hard cap regardless of organic_ratio)
         """
         if stage in ("new", "warming"):
             logger.debug(
@@ -183,18 +183,20 @@ class ContentGenerator:
             )
             return False
         elif stage == "established":
-            result = random.random() < 0.05
+            result = random.random() < 0.03
             logger.debug(
                 f"Promo decision: sub={subreddit} project={project} "
-                f"stage={stage} -> {'PROMO' if result else 'ORGANIC'} (5% chance)"
+                f"stage={stage} -> {'PROMO' if result else 'ORGANIC'} (3% chance)"
             )
             return result
-        else:  # trusted or unknown
-            result = self._should_be_promotional()
+        else:  # trusted
+            # Hard cap at 8% regardless of config ratio
+            effective_ratio = min(1.0 - self.organic_ratio, 0.08)
+            result = random.random() < effective_ratio
             logger.debug(
                 f"Promo decision: sub={subreddit} project={project} "
                 f"stage={stage} -> {'PROMO' if result else 'ORGANIC'} "
-                f"(ratio={1 - self.organic_ratio:.0%})"
+                f"(ratio={effective_ratio:.0%})"
             )
             return result
 

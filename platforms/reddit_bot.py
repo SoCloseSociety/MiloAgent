@@ -11,8 +11,11 @@ import praw
 from platforms.base_platform import BasePlatform
 from core.database import Database
 from core.content_gen import ContentGenerator
+from core.content_validator import ContentValidator
 
 logger = logging.getLogger(__name__)
+
+_validator = ContentValidator()
 
 
 class RedditBot(BasePlatform):
@@ -153,33 +156,88 @@ class RedditBot(BasePlatform):
     def act(self, opportunity: Dict, project: Dict) -> bool:
         """Generate and post a comment on the given opportunity.
 
-        1. Decide if promotional (80/20 ratio)
+        1. Use stage-aware promotional decision
         2. Generate comment via LLM
-        3. Add human-like delay
-        4. Post comment
-        5. Log action to database
+        3. Validate content (retry up to 2x if bot-like)
+        4. Add human-like delay
+        5. Post comment
+        6. Log action to database
         """
         project_name = project.get("project", {}).get("name", "unknown")
+        stage = opportunity.get("_community_stage", "new")
 
         try:
-            is_promo = self.content_gen._should_be_promotional()
-            comment_text = self.content_gen.generate_reddit_comment(
-                post_title=opportunity["title"],
-                post_body=opportunity.get("body", ""),
-                subreddit=opportunity["subreddit"],
-                project=project,
-                is_promotional=is_promo,
+            is_promo = self.content_gen.should_be_promotional(
+                subreddit=opportunity.get("subreddit", ""),
+                project=project_name,
+                stage=stage,
             )
+
+            # Generate + validate loop (max 3 attempts)
+            comment_text = None
+            for attempt in range(3):
+                candidate = self.content_gen.generate_reddit_comment(
+                    post_title=opportunity["title"],
+                    post_body=opportunity.get("body", ""),
+                    subreddit=opportunity["subreddit"],
+                    project=project,
+                    is_promotional=is_promo,
+                )
+
+                # Validate against bot patterns
+                is_valid, score, issues = _validator.validate(
+                    candidate, project, platform="reddit"
+                )
+
+                if is_valid and score >= 0.7:
+                    comment_text = candidate
+                    if attempt > 0:
+                        logger.info(
+                            f"Comment passed validation on attempt {attempt+1} "
+                            f"(score={score:.2f})"
+                        )
+                    break
+
+                logger.warning(
+                    f"Comment rejected (attempt {attempt+1}/3, score={score:.2f}): "
+                    f"{issues[:3]}"
+                )
+
+                if attempt < 2:
+                    time.sleep(random.uniform(2, 5))
+
+            if not comment_text:
+                logger.warning(
+                    f"All 3 comment attempts rejected for "
+                    f"r/{opportunity['subreddit']}: {opportunity['title'][:50]}"
+                )
+                self.db.log_action(
+                    platform="reddit",
+                    action_type="comment",
+                    account=self._username,
+                    project=project_name,
+                    target_id=opportunity["target_id"],
+                    content="",
+                    success=False,
+                    error_message="Content validation failed 3x",
+                )
+                self.db.update_opportunity_status(
+                    opportunity["target_id"], "skipped",
+                    rejection_reason="content_validation_failed",
+                )
+                return False
 
             logger.info(
                 f"Generated {'promo' if is_promo else 'organic'} comment "
-                f"for r/{opportunity['subreddit']}: "
+                f"({stage}) for r/{opportunity['subreddit']}: "
                 f"{opportunity['title'][:50]}..."
             )
             logger.debug(f"Comment text: {comment_text[:200]}...")
 
-            # Human-like delay before posting
-            time.sleep(random.uniform(5, 20))
+            # Human-like delay before posting (longer for new accounts)
+            min_delay = 15 if stage in ("new", "warming") else 8
+            max_delay = 45 if stage in ("new", "warming") else 25
+            time.sleep(random.uniform(min_delay, max_delay))
 
             submission = self.reddit.submission(id=opportunity["target_id"])
             comment = submission.reply(comment_text)
@@ -196,6 +254,7 @@ class RedditBot(BasePlatform):
                     "comment_id": comment.id,
                     "promotional": is_promo,
                     "subreddit": opportunity["subreddit"],
+                    "stage": stage,
                 },
             )
             self.db.update_opportunity_status(
