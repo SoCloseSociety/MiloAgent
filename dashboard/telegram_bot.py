@@ -210,6 +210,18 @@ class TelegramDashboard:
             "/pause — Take a break\n"
             "/resume — Get back to work"
         )
+        # Send logo with help text
+        from pathlib import Path
+        logo = Path(__file__).parent.parent / "assets" / "miloagent.png"
+        if logo.exists():
+            try:
+                await update.message.reply_photo(
+                    photo=open(logo, "rb"),
+                    caption=text,
+                )
+                return
+            except Exception:
+                pass
         await update.message.reply_text(text)
 
     async def _cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

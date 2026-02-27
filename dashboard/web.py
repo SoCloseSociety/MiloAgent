@@ -381,6 +381,10 @@ class WebDashboard:
     # ── Static files ─────────────────────────────────────────
 
     def _setup_static(self):
+        # Also serve assets/ for logo access
+        assets_dir = Path(__file__).parent.parent / "assets"
+        if assets_dir.exists():
+            self.app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
         static_dir = Path(__file__).parent / "static"
         if static_dir.exists():
             self.app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

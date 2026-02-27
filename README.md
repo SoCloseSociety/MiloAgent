@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="https://raw.githubusercontent.com/SoCloseSociety/MiloAgent/main/assets/miloagent.png" alt="MiloAgent Logo" width="180">
+</p>
+
+<p align="center">
   <img src="https://raw.githubusercontent.com/SoCloseSociety/MiloAgent/main/assets/banner.svg" alt="MiloAgent — Autonomous AI Growth Agent" width="900">
 </p>
 

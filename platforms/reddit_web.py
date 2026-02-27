@@ -6,6 +6,7 @@ This is the fallback when the user doesn't have API credentials (PRAW).
 
 import json
 import os
+import re
 import time
 import random
 import logging
@@ -72,6 +73,9 @@ class RedditWebBot(BasePlatform):
         self._consecutive_failures = 0
         self._max_failures = 5
         self._circuit_breaker_opened_at: Optional[float] = None
+
+        # Rate limit tracking: don't retry until this timestamp
+        self._ratelimit_until: float = 0.0
 
         # Track subscribed subreddits to avoid re-subscribing every cycle
         self._subscribed_subs: set = set()
@@ -471,9 +475,39 @@ class RedditWebBot(BasePlatform):
 
     # ── Posting (requires authentication) ────────────────────────────
 
+    @staticmethod
+    def _parse_ratelimit_wait(error_msg: str) -> int:
+        """Parse Reddit RATELIMIT message to extract wait time in minutes.
+
+        Examples: "Take a break for 3 minutes", "Take a break for 45 seconds"
+        """
+        msg = error_msg.lower()
+        # Try minutes first
+        m = re.search(r"(\d+)\s*minute", msg)
+        if m:
+            return int(m.group(1)) + 1  # +1 safety margin
+        # Try seconds
+        m = re.search(r"(\d+)\s*second", msg)
+        if m:
+            return max(1, int(m.group(1)) // 60 + 1)
+        # Try hours (rare)
+        m = re.search(r"(\d+)\s*hour", msg)
+        if m:
+            return int(m.group(1)) * 60
+        return 10  # Safe fallback
+
     def act(self, opportunity: Dict, project: Dict) -> bool:
         """Generate, validate, and post a comment."""
         project_name = project.get("project", {}).get("name", "unknown")
+
+        # Rate limit guard: don't even try if we're still cooling down
+        if time.time() < self._ratelimit_until:
+            remaining = int((self._ratelimit_until - time.time()) / 60)
+            logger.debug(
+                f"Skipping action for {self._username}: "
+                f"rate-limited for {remaining}min more"
+            )
+            return False
 
         # Circuit breaker with auto-reset after 30 minutes
         if self._consecutive_failures >= self._max_failures:
@@ -609,6 +643,29 @@ class RedditWebBot(BasePlatform):
             errors = result.get("json", {}).get("errors", [])
             if errors:
                 error_msg = str(errors)
+                # Parse RATELIMIT: extract wait time and sleep it out
+                is_ratelimit = any(
+                    e[0] == "RATELIMIT" for e in errors if isinstance(e, list) and e
+                )
+                if is_ratelimit:
+                    wait_minutes = self._parse_ratelimit_wait(error_msg)
+                    logger.warning(
+                        f"Reddit RATELIMIT for {self._username}: "
+                        f"waiting {wait_minutes}min before next action"
+                    )
+                    self._ratelimit_until = time.time() + wait_minutes * 60
+                    self.db.log_action(
+                        platform="reddit",
+                        action_type="comment",
+                        account=self._username,
+                        project=project_name,
+                        target_id=opportunity["target_id"],
+                        content=comment_text,
+                        success=False,
+                        error_message=f"RATELIMIT:{wait_minutes}min",
+                    )
+                    # Don't count as circuit breaker failure — it's temporary
+                    return False
                 logger.error(f"Reddit comment error: {error_msg}")
                 self.db.log_action(
                     platform="reddit",
@@ -889,11 +946,24 @@ class RedditWebBot(BasePlatform):
 
             if resp.status_code == 429:
                 logger.warning("Rate limited on post creation")
+                self._ratelimit_until = time.time() + 10 * 60  # 10min default
                 return None
 
             result = resp.json()
             errors = result.get("json", {}).get("errors", [])
             if errors:
+                error_msg = str(errors)
+                # Parse specific error types
+                error_codes = [e[0] for e in errors if isinstance(e, list) and e]
+                if "RATELIMIT" in error_codes:
+                    wait = self._parse_ratelimit_wait(error_msg)
+                    logger.warning(f"Post RATELIMIT for {self._username}: {wait}min cooldown")
+                    self._ratelimit_until = time.time() + wait * 60
+                    return None
+                if "BAD_CAPTCHA" in error_codes:
+                    logger.warning(f"CAPTCHA required for {self._username} — cooldown 30min")
+                    self._ratelimit_until = time.time() + 30 * 60
+                    return None
                 logger.error(f"Post creation error: {errors}")
                 return None
 
@@ -1030,7 +1100,12 @@ class RedditWebBot(BasePlatform):
                     content="",
                 )
                 return True
-            logger.warning(f"Subscribe failed: {resp.status_code}")
+            # 403/404 = sub doesn't exist or is private — cache to avoid retrying
+            if resp.status_code in (403, 404):
+                self._subscribed_subs.add(subreddit.lower())  # Skip in future
+                logger.debug(f"Subscribe r/{subreddit}: {resp.status_code} (skipping)")
+                return False
+            logger.warning(f"Subscribe r/{subreddit} failed: {resp.status_code}")
             return False
         except Exception as e:
             logger.error(f"Subscribe error: {e}")

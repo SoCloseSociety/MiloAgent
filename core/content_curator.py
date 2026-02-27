@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 _HTTP_TIMEOUT = 15
 # Timeout for yt-dlp subprocess
 _YTDLP_TIMEOUT = 30
+# Track if yt-dlp is available (avoid repeated warnings)
+_ytdlp_available: Optional[bool] = None
 
 # User agents for scraping
 _USER_AGENTS = [
@@ -80,6 +82,9 @@ class ContentCurator:
 
         Returns list of dicts with: title, url, channel, views, duration, description
         """
+        global _ytdlp_available
+        if _ytdlp_available is False:
+            return []  # Already know it's not installed
         try:
             cmd = [
                 "yt-dlp",
@@ -128,7 +133,10 @@ class ContentCurator:
             logger.warning("yt-dlp search timed out")
             return []
         except FileNotFoundError:
-            logger.warning("yt-dlp not installed")
+            global _ytdlp_available
+            if _ytdlp_available is not False:
+                logger.warning("yt-dlp not installed — YouTube search disabled")
+                _ytdlp_available = False
             return []
         except Exception as e:
             logger.error(f"YouTube search failed: {e}")

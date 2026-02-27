@@ -1154,7 +1154,10 @@ class Orchestrator:
                     )
 
             except Exception as e:
-                logger.error(f"Action failed: {e}")
+                logger.error(
+                    f"Action failed for {platform}/{account.get('username', '?')}: "
+                    f"{type(e).__name__}: {e or 'no details'}"
+                )
                 # Mark opportunity as failed to prevent retry loops
                 try:
                     self.db.update_opportunity_status(opp["target_id"], "failed")
@@ -1215,6 +1218,11 @@ class Orchestrator:
         if "403" in msg or "forbidden" in msg:
             return 15
         if "429" in msg or "rate limit" in msg or "ratelimit" in msg:
+            # Try to parse exact minutes from "RATELIMIT:Xmin" format
+            import re
+            m = re.search(r"ratelimit:(\d+)min", msg)
+            if m:
+                return int(m.group(1))
             return 8
         if "circuit breaker" in msg:
             return 30
