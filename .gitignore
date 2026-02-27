@@ -40,6 +40,20 @@ data/curator_cache/
 *.session
 *.session-journal
 
+# ── Project configs with real credentials (NEVER commit) ──
+# The repo ships template configs in config/*.yaml — those are safe.
+# But server-side configs with real passwords MUST NOT be committed.
+# If you customize config files, use config/*.local.yaml naming.
+projects/*.yaml
+!projects/example_project.yaml
+
+# ── Old directory structures (purged from history) ────────
+miloagent/config/
+miloagent/projects/
+miloagent/data/
+growthbot/config/
+growthbot/projects/
+
 # ── Logs ──────────────────────────────────────────────────
 *.log
 logs/
