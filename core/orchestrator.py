@@ -26,7 +26,7 @@ from typing import Dict, List, Optional
 
 import yaml
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.events import EVENT_JOB_ERROR
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 
 from core.database import Database
 from core.environment import detect_environment
@@ -161,7 +161,7 @@ class Orchestrator:
         # Subreddit rotation index (for round-robin across cycles)
         self._sub_rotation_index: int = 0
 
-        # Platform rotation (thread-safe)
+        # Platform rotation (thread-safe) — lock protects _platform_turn AND _sub_rotation_index
         self._platform_turn: int = 0
         self._state_lock = threading.Lock()
 
@@ -406,7 +406,7 @@ class Orchestrator:
         self.scheduler.add_job(
             self._health_check, "interval",
             minutes=60, id="health_check",
-            next_run_time=None,
+            next_run_time=datetime.now() + timedelta(minutes=10),
         )
         self.scheduler.add_job(
             self._learn, "interval",
@@ -416,7 +416,7 @@ class Orchestrator:
         self.scheduler.add_job(
             self._verify_comments, "interval",
             hours=1, id="verify_comments",
-            next_run_time=None,
+            next_run_time=datetime.now() + timedelta(minutes=20),
         )
         self.scheduler.add_job(
             self._seed_content, "interval",
@@ -511,13 +511,33 @@ class Orchestrator:
                 hour=report_hour, id="daily_report",
             )
 
-        # Log scheduled job failures (instead of silently swallowing them)
+        # DB maintenance every 12h (prevents WAL bloat and query degradation)
+        self.scheduler.add_job(
+            self._db_maintenance, "interval",
+            hours=12, id="db_maintenance",
+            next_run_time=datetime.now() + timedelta(hours=1),
+        )
+
+        # Log scheduled job failures and auto-recover
         def _on_job_error(event):
             logger.error(
                 f"Scheduled job '{event.job_id}' crashed: {event.exception}",
                 exc_info=event.exception,
             )
+            # Auto-recovery: re-enable the job if it was disabled by the error
+            try:
+                job = self.scheduler.get_job(event.job_id)
+                if job and job.next_run_time is None:
+                    job.resume()
+                    logger.info(f"Auto-recovered crashed job '{event.job_id}'")
+            except Exception:
+                pass
+
+        def _on_job_missed(event):
+            logger.warning(f"Scheduled job '{event.job_id}' missed its run window")
+
         self.scheduler.add_listener(_on_job_error, EVENT_JOB_ERROR)
+        self.scheduler.add_listener(_on_job_missed, EVENT_JOB_MISSED)
 
         self.scheduler.start()
 
@@ -551,17 +571,21 @@ class Orchestrator:
                 time.sleep(1)
 
     def stop(self):
-        """Graceful shutdown — close all resources. Idempotent (safe to call twice)."""
+        """Graceful shutdown — close all resources. Idempotent (safe to call twice).
+
+        Must complete within systemd TimeoutStopSec (15s) to avoid SIGKILL.
+        """
         if not self._running and not hasattr(self, '_stopping'):
             return  # Already stopped
         self._stopping = True
         logger.info("Shutting down Milo...")
         self._running = False
+        self._paused = True  # Stop any new work immediately
         self.resource_monitor.stop()
         self.business_mgr.stop_watching()
         try:
-            # wait=True gives running jobs up to ~5s to finish before force-killing
-            self.scheduler.shutdown(wait=True)
+            # wait=False to avoid blocking on long-running jobs (SIGKILL risk)
+            self.scheduler.shutdown(wait=False)
         except Exception:
             pass  # Already shut down
 
@@ -807,13 +831,14 @@ class Orchestrator:
             all_subs = []
 
         if len(all_subs) > MAX_SUBREDDITS_PER_SCAN:
-            # Round-robin: pick the next batch
-            start = self._sub_rotation_index % len(all_subs)
+            # Round-robin: pick the next batch (thread-safe)
+            with self._state_lock:
+                start = self._sub_rotation_index % len(all_subs)
+                self._sub_rotation_index = (start + MAX_SUBREDDITS_PER_SCAN) % len(all_subs)
             selected = []
             for i in range(MAX_SUBREDDITS_PER_SCAN):
                 idx = (start + i) % len(all_subs)
                 selected.append(all_subs[idx])
-            self._sub_rotation_index = (start + MAX_SUBREDDITS_PER_SCAN) % len(all_subs)
 
             # Update config with limited subs
             if isinstance(subs, dict):
@@ -2042,6 +2067,27 @@ class Orchestrator:
 
         if shared:
             logger.info(f"Cross-platform sharing: {shared} Reddit posts shared to Twitter")
+
+    def _db_maintenance(self):
+        """Periodic DB maintenance: WAL checkpoint, ANALYZE, prune old data."""
+        try:
+            conn = self.db.conn
+            # Force WAL checkpoint to keep file size manageable
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            # Update query planner statistics
+            conn.execute("ANALYZE")
+            # Prune opportunities older than 7 days (prevent unbounded growth)
+            conn.execute(
+                "DELETE FROM opportunities WHERE discovered_at < datetime('now', '-7 days') AND status != 'acted'"
+            )
+            # Prune old decision_log entries (keep 7 days)
+            conn.execute(
+                "DELETE FROM decision_log WHERE timestamp < datetime('now', '-7 days')"
+            )
+            conn.commit()
+            logger.info("DB maintenance complete: WAL checkpoint + ANALYZE + prune old data")
+        except Exception as e:
+            logger.error(f"DB maintenance failed: {e}")
 
     def _health_check(self):
         """Run periodic health checks on all accounts."""
