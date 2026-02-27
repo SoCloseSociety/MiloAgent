@@ -1214,9 +1214,9 @@ async function refresh() {
       const [comms, targets, requests] = await Promise.allSettled([
         api('/api/communities'), api('/api/takeover/targets'), api('/api/takeover/requests')
       ]);
-      if (comms.status==='fulfilled') renderCommunities(comms.value);
-      if (targets.status==='fulfilled') renderTakeoverTargets(targets.value);
-      if (requests.status==='fulfilled') renderTakeoverRequests(requests.value);
+      if (comms.status==='fulfilled') renderCommunities(comms.value.communities || comms.value);
+      if (targets.status==='fulfilled') renderTakeoverTargets(targets.value.targets || targets.value);
+      if (requests.status==='fulfilled') renderTakeoverRequests(requests.value.requests || requests.value);
     }
     else if (currentTab === 'manage') {
       const [projects, accounts, cookies] = await Promise.allSettled([
