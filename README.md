@@ -10,7 +10,8 @@
 
 <p align="center">
   <strong>An autonomous AI agent that lives on Reddit, learns from every interaction, and grows your product organically.</strong><br>
-  <em>Currently expanding his skills to Twitter/X and Telegram.</em>
+  <em>Currently expanding his skills to Twitter/X and Telegram.</em><br><br>
+  <a href="https://milo.soclose.co">https://milo.soclose.co</a>
 </p>
 
 <p align="center">
@@ -22,6 +23,7 @@
   <img src="https://img.shields.io/badge/telegram-learning-26A5E4?style=flat-square&logo=telegram&logoColor=white" alt="Telegram Learning"/>
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License"/>
   <img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Ready"/>
+  <a href="https://milo.soclose.co"><img src="https://img.shields.io/badge/live-milo.soclose.co-06b6d4?style=flat-square&logo=vercel&logoColor=white" alt="Live Demo"/></a>
 </p>
 
 ---
@@ -279,6 +281,8 @@ python3 miloagent.py run --web    # Opens on port 8420
 ```
 Full browser UI with real-time stats, action logs, account health, and project management.
 
+**Live instance:** [milo.soclose.co](https://milo.soclose.co)
+
 ### Terminal Dashboard (TUI)
 ```bash
 python3 miloagent.py dashboard
@@ -461,7 +465,7 @@ MIT License — see [LICENSE](LICENSE).
 <p align="center">
   <img src="https://raw.githubusercontent.com/SoCloseSociety/MiloAgent/main/assets/miloagent.png" alt="MiloAgent" width="64"><br>
   <strong>Milo never sleeps. He scans, he learns, he grows your product.</strong><br>
-  <em>Star this repo if you want to see where he goes next.</em>
+  <a href="https://milo.soclose.co">milo.soclose.co</a> &mdash; <em>Star this repo if you want to see where he goes next.</em>
 </p>
 
 ---
