@@ -459,6 +459,16 @@ MIT License — see [LICENSE](LICENSE).
 ---
 
 <p align="center">
+  <img src="https://raw.githubusercontent.com/SoCloseSociety/MiloAgent/main/assets/miloagent.png" alt="MiloAgent" width="64"><br>
   <strong>Milo never sleeps. He scans, he learns, he grows your product.</strong><br>
   <em>Star this repo if you want to see where he goes next.</em>
+</p>
+
+---
+
+<p align="center">
+  <sub>
+    <strong>MiloAgent</strong> &mdash; AI Growth Agent | Reddit Bot | Twitter Bot | Telegram Bot | LLM Agent | Social Media Automation | Community Management | Self-Learning | A/B Testing | Growth Hacking | Open Source | Zero Cost<br>
+    Built with Python, FastAPI, Groq, Gemini, Ollama &mdash; by <a href="https://github.com/SoCloseSociety">SoCloseSociety</a>
+  </sub>
 </p>

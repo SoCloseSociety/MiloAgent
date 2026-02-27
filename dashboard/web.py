@@ -402,6 +402,15 @@ class WebDashboard:
                 return FileResponse(str(html))
             return {"error": "index.html not found"}
 
+        # ── SEO: robots.txt + sitemap ─
+        @app.get("/robots.txt")
+        async def robots():
+            from fastapi.responses import PlainTextResponse
+            return PlainTextResponse(
+                "User-agent: *\nAllow: /\nDisallow: /api/\n"
+                "Sitemap: https://github.com/SoCloseSociety/MiloAgent\n"
+            )
+
         # ── GET /health (no auth — for Docker healthcheck) ─
         @app.get("/health")
         async def health():
