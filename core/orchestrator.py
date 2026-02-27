@@ -1252,12 +1252,12 @@ class Orchestrator:
         if "403" in msg or "forbidden" in msg:
             return 15
         if "429" in msg or "rate limit" in msg or "ratelimit" in msg:
-            # Try to parse exact minutes from "RATELIMIT:Xmin" format
+            # Parse exact minutes from "RATELIMIT:Xmin" or "Take a break for X minu"
             import re
-            m = re.search(r"ratelimit:(\d+)min", msg)
+            m = re.search(r"ratelimit:(\d+)", msg) or re.search(r"break for (\d+) min", msg)
             if m:
-                return int(m.group(1))
-            return 8
+                return int(m.group(1)) + 2  # Buffer: wait 2min extra beyond Reddit's ask
+            return 10
         if "circuit breaker" in msg:
             return 30
         # Content validation, auth refresh, generic failures

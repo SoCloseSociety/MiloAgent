@@ -160,7 +160,7 @@ class LLMProvider:
                     base_url=cfg["base_url"],
                     api_key=api_key,
                     max_retries=0,
-                    timeout=30.0,
+                    timeout=45.0,
                 )
                 self.provider_configs[name] = cfg
                 self._stats[name] = {
