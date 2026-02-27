@@ -30,6 +30,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+try:
+    from passlib.context import CryptContext
+    _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+except ImportError:
+    _pwd_ctx = None
+
 logger = logging.getLogger(__name__)
 
 _security = HTTPBearer(auto_error=False)
@@ -261,22 +267,51 @@ class WebDashboard:
         self.orch = orchestrator
         self.app = FastAPI(title="MiloAgent", docs_url=None, redoc_url=None)
 
+        # CORS: restrict to known origins (configurable via env)
+        cors_env = os.environ.get("MILO_CORS_ORIGINS", "")
+        if cors_env:
+            allowed_origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+        else:
+            # Default: allow same-host access only
+            web_port = self.orch.settings.get("web_dashboard", {}).get("port", 8420)
+            allowed_origins = [
+                f"http://localhost:{web_port}",
+                f"http://127.0.0.1:{web_port}",
+            ]
+            # Also allow the server's public IP if set
+            server_ip = os.environ.get("MILO_SERVER_IP", "")
+            if server_ip:
+                allowed_origins.append(f"http://{server_ip}:{web_port}")
+
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origins=allowed_origins,
             allow_methods=["GET", "POST", "PUT", "DELETE"],
             allow_headers=["Authorization", "Content-Type"],
         )
 
-        # Auth: username/password
+        # Auth: username/password with bcrypt hashing
         self._user = os.environ.get("MILO_WEB_USER", "") or "admin"
-        self._pass = os.environ.get("MILO_WEB_PASS", "") or self.orch.settings.get("web_dashboard", {}).get("password", "")
-        if not self._pass:
+        raw_pass = os.environ.get("MILO_WEB_PASS", "") or self.orch.settings.get("web_dashboard", {}).get("password", "")
+        if not raw_pass:
             # Fallback to legacy token
-            self._pass = os.environ.get("MILO_WEB_TOKEN", "") or self.orch.settings.get("web_dashboard", {}).get("token", "")
-        if not self._pass:
-            logger.warning("MILO_WEB_PASS not set — using 'milo' as default")
-            self._pass = "milo"
+            raw_pass = os.environ.get("MILO_WEB_TOKEN", "") or self.orch.settings.get("web_dashboard", {}).get("token", "")
+        if not raw_pass or raw_pass == "milo":
+            logger.critical(
+                "MILO_WEB_PASS not set or using weak default! "
+                "Set a strong password via MILO_WEB_PASS env var or config/settings.yaml"
+            )
+            if not raw_pass:
+                raw_pass = "milo"  # Keep running but warn loudly
+
+        # Hash password at startup (timing-safe comparison on login)
+        if _pwd_ctx:
+            self._pass_hash = _pwd_ctx.hash(raw_pass)
+            self._pass = None  # Don't keep plaintext in memory
+        else:
+            logger.warning("passlib not installed — falling back to plaintext password comparison")
+            self._pass_hash = None
+            self._pass = raw_pass
 
         # Session tokens: {token_hex: {user, created_at, ip}}
         self._sessions: Dict[str, dict] = {}
@@ -337,8 +372,8 @@ class WebDashboard:
                                if now - v["created_at"] > self._session_ttl]
                     for k in expired:
                         del self._sessions[k]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Resource sampler error: {e}")
             time.sleep(5)
 
     # ── Auth ──────────────────────────────────────────────────
@@ -394,9 +429,19 @@ class WebDashboard:
     def _setup_routes(self):
         app = self.app
 
-        # ── HTML entry point ───────────────────────────────
+        # ── HTML entry points ──────────────────────────────
         @app.get("/")
-        async def index():
+        async def landing():
+            """Public landing page (site vitrine)."""
+            html = Path(__file__).parent / "static" / "landing.html"
+            if html.exists():
+                return FileResponse(str(html))
+            # Fallback to dashboard if no landing page
+            return FileResponse(str(Path(__file__).parent / "static" / "index.html"))
+
+        @app.get("/login")
+        async def login_page():
+            """Admin dashboard (login + SPA)."""
             html = Path(__file__).parent / "static" / "index.html"
             if html.exists():
                 return FileResponse(str(html))
@@ -422,7 +467,13 @@ class WebDashboard:
             ip = request.client.host if request.client else "unknown"
             if not self._login_limiter.check_and_record(ip):
                 raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
-            if body.username == self._user and body.password == self._pass:
+            # Verify credentials (timing-safe with bcrypt if available)
+            user_ok = body.username == self._user
+            if self._pass_hash and _pwd_ctx:
+                pass_ok = _pwd_ctx.verify(body.password, self._pass_hash)
+            else:
+                pass_ok = body.password == self._pass
+            if user_ok and pass_ok:
                 token = self._create_session(body.username, ip)
                 return {"ok": True, "token": token}
             raise HTTPException(status_code=401, detail="Invalid credentials")

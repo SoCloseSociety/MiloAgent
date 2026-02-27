@@ -26,6 +26,7 @@ from typing import Dict, List, Optional
 
 import yaml
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.events import EVENT_JOB_ERROR
 
 from core.database import Database
 from core.environment import detect_environment
@@ -509,6 +510,14 @@ class Orchestrator:
                 self._send_daily_report, "cron",
                 hour=report_hour, id="daily_report",
             )
+
+        # Log scheduled job failures (instead of silently swallowing them)
+        def _on_job_error(event):
+            logger.error(
+                f"Scheduled job '{event.job_id}' crashed: {event.exception}",
+                exc_info=event.exception,
+            )
+        self.scheduler.add_listener(_on_job_error, EVENT_JOB_ERROR)
 
         self.scheduler.start()
 
@@ -2566,17 +2575,29 @@ class Orchestrator:
         total_posts = 0
 
         for project in self.projects:
-            account = self.account_mgr.get_next_account("reddit")
-            if not account:
-                continue
+            proj_name = project.get("project", {}).get("name", "unknown")
+            hubs = self.hub_manager.get_hubs(proj_name)
 
-            try:
-                bot = self._get_reddit_bot(account)
-                stats = self.hub_manager.run_hub_cycle(project, bot)
-                total_posts += stats.get("posts_created", 0)
-            except Exception as e:
-                proj_name = project.get("project", {}).get("name", "unknown")
-                logger.error(f"Hub animation failed for {proj_name}: {e}")
+            for hub in hubs:
+                # Use the assigned account for this hub (same logic as _manage_communities)
+                assigned_username = hub.get("account", "")
+                if assigned_username:
+                    account = self.account_mgr.get_account_by_username("reddit", assigned_username)
+                    if not account:
+                        account = self.account_mgr.get_next_account("reddit")
+                else:
+                    account = self.account_mgr.get_next_account("reddit")
+                if not account:
+                    continue
+
+                try:
+                    bot = self._get_reddit_bot(account)
+                    stats = self.hub_manager.run_hub_cycle(project, bot)
+                    total_posts += stats.get("posts_created", 0)
+                    break  # run_hub_cycle handles all hubs for this project
+                except Exception as e:
+                    logger.error(f"Hub animation failed for {proj_name}: {e}")
+                    break
 
         if total_posts:
             self._send_telegram_alert(
@@ -2667,7 +2688,9 @@ class Orchestrator:
                         else:
                             logger.warning(f"Could not create/confirm r/{sub_name} — will retry next cycle")
                             continue  # Skip setup if we can't create it
-                        time.sleep(random.uniform(10, 30))
+                        # Wait 30-60s for Reddit to index the new subreddit
+                        # (needed for fullname lookup in setup steps)
+                        time.sleep(random.uniform(30, 60))
 
                     # 1. Complete setup for new hubs
                     if not hub.get("setup_complete"):

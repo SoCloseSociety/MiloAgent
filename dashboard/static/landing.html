@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiloAgent — Autonomous AI Growth Agent</title>
+
+    <!-- SEO -->
+    <meta name="description" content="MiloAgent is an autonomous AI agent that lives on Reddit, learns from every interaction, and grows your product organically. Open source, self-learning, zero-cost AI growth engine.">
+    <meta name="keywords" content="AI agent, Reddit bot, autonomous growth, self-learning AI, community management, open source, organic marketing, Reddit automation, Groq, Gemini, MiloAgent">
+    <meta name="author" content="SoCloseSociety">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://miloagent.com">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="MiloAgent — Autonomous AI Growth Agent">
+    <meta property="og:description" content="An AI agent that lives on Reddit, learns from every interaction, and grows your product organically.">
+    <meta property="og:image" content="/static/miloagent.png">
+    <meta property="og:url" content="https://miloagent.com">
+    <meta property="og:site_name" content="MiloAgent">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="MiloAgent — Autonomous AI Growth Agent">
+    <meta name="twitter:description" content="An AI agent that lives on Reddit, learns from every interaction, and grows your product organically.">
+    <meta name="twitter:image" content="/static/miloagent.png">
+
+    <!-- JSON-LD -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "MiloAgent",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Linux, macOS",
+        "description": "Autonomous AI growth agent that operates on Reddit, learns from interactions, and grows products organically.",
+        "url": "https://github.com/SoCloseSociety/MiloAgent",
+        "author": {
+            "@type": "Organization",
+            "name": "SoCloseSociety",
+            "url": "https://github.com/SoCloseSociety"
+        },
+        "license": "https://opensource.org/licenses/MIT",
+        "programmingLanguage": "Python",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        }
+    }
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/static/miloagent.png">
+    <link rel="apple-touch-icon" href="/static/miloagent.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #05080f;
+            --bg2: #0b1120;
+            --bg3: #111827;
+            --border: #1e2d3d;
+            --border2: #2a3a4d;
+            --text: #e2e8f0;
+            --text2: #94a3b8;
+            --text3: #64748b;
+            --cyan: #06b6d4;
+            --blue: #3b82f6;
+            --purple: #a855f7;
+            --green: #22c55e;
+            --orange: #f97316;
+            --pink: #ec4899;
+            --glass: rgba(11, 17, 32, 0.7);
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* ── Background Gradient ───────────────────────── */
+        .bg-gradient {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background:
+                radial-gradient(ellipse 80% 60% at 50% -20%, rgba(6,182,212,0.08), transparent),
+                radial-gradient(ellipse 60% 50% at 80% 50%, rgba(59,130,246,0.05), transparent),
+                radial-gradient(ellipse 60% 50% at 20% 80%, rgba(168,85,247,0.05), transparent);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ── Navbar ────────────────────────────────────── */
+        .navbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .nav-brand img {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+        }
+
+        .nav-brand span {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--cyan), var(--blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 1px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .nav-links a {
+            color: var(--text2);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover { color: var(--text); }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--cyan), var(--blue));
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 24px rgba(6,182,212,0.3);
+            transform: translateY(-1px);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text2);
+            border: 1px solid var(--border);
+        }
+
+        .btn-ghost:hover {
+            color: var(--text);
+            border-color: var(--border2);
+            background: rgba(255,255,255,0.03);
+        }
+
+        /* ── Hero ──────────────────────────────────────── */
+        .hero {
+            text-align: center;
+            padding: 80px 0 60px;
+        }
+
+        .hero-logo {
+            width: 100px;
+            height: 100px;
+            border-radius: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 0 40px rgba(6,182,212,0.15);
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--cyan), var(--blue), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero .subtitle {
+            font-size: 20px;
+            color: var(--text2);
+            font-weight: 500;
+            margin-bottom: 24px;
+        }
+
+        .hero .tagline {
+            font-size: 16px;
+            color: var(--text3);
+            max-width: 600px;
+            margin: 0 auto 40px;
+            line-height: 1.7;
+        }
+
+        .hero-actions {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        /* ── Features ──────────────────────────────────── */
+        .section {
+            padding: 60px 0;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .section-subtitle {
+            text-align: center;
+            color: var(--text3);
+            font-size: 15px;
+            margin-bottom: 48px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .feature-card {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px 24px;
+            backdrop-filter: blur(12px);
+            transition: all 0.25s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--border2);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+
+        .feature-icon {
+            font-size: 28px;
+            margin-bottom: 14px;
+            display: block;
+        }
+
+        .feature-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .feature-card p {
+            font-size: 13px;
+            color: var(--text2);
+            line-height: 1.6;
+        }
+
+        /* ── How It Works ──────────────────────────────── */
+        .flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 40px 0;
+        }
+
+        .flow-step {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--cyan);
+            letter-spacing: 0.5px;
+        }
+
+        .flow-arrow {
+            color: var(--text3);
+            font-size: 18px;
+        }
+
+        /* ── Tech Stack ────────────────────────────────── */
+        .tech-badges {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .tech-badge {
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text2);
+        }
+
+        /* ── Stats ─────────────────────────────────────── */
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            padding: 40px 0;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--cyan), var(--blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--text3);
+            margin-top: 4px;
+        }
+
+        /* ── Footer ────────────────────────────────────── */
+        .footer {
+            border-top: 1px solid var(--border);
+            padding: 40px 0;
+            text-align: center;
+        }
+
+        .footer-links {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            margin-bottom: 16px;
+        }
+
+        .footer-links a {
+            color: var(--text2);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover { color: var(--cyan); }
+
+        .footer-text {
+            color: var(--text3);
+            font-size: 13px;
+        }
+
+        .footer-text a {
+            color: var(--text2);
+            text-decoration: none;
+        }
+
+        .footer-text a:hover { color: var(--cyan); }
+
+        /* ── Responsive ────────────────────────────────── */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 32px; }
+            .hero .subtitle { font-size: 17px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .stats { gap: 32px; }
+            .flow-step { padding: 8px 14px; font-size: 12px; }
+            .nav-links { gap: 12px; }
+            .nav-links a.hide-mobile { display: none; }
+        }
+
+        @media (max-width: 480px) {
+            .hero { padding: 48px 0 32px; }
+            .hero-logo { width: 72px; height: 72px; }
+            .hero h1 { font-size: 26px; }
+            .hero-actions { flex-direction: column; }
+            .btn { width: 100%; justify-content: center; }
+            .navbar { flex-direction: column; gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="bg-gradient"></div>
+
+<div class="container">
+
+    <!-- Navbar -->
+    <nav class="navbar">
+        <a href="/" class="nav-brand">
+            <img src="/static/miloagent.png" alt="MiloAgent">
+            <span>MILOAGENT</span>
+        </a>
+        <div class="nav-links">
+            <a href="#features" class="hide-mobile">Features</a>
+            <a href="#how-it-works" class="hide-mobile">How it works</a>
+            <a href="https://github.com/SoCloseSociety/MiloAgent" target="_blank">GitHub</a>
+            <a href="/login" class="btn btn-ghost">Login</a>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <img src="/static/miloagent.png" alt="MiloAgent Logo" class="hero-logo">
+        <h1>MILOAGENT</h1>
+        <p class="subtitle">Autonomous AI Growth Agent</p>
+        <p class="tagline">
+            An AI agent that lives on Reddit, learns from every interaction,
+            and grows your product organically. Self-learning, multi-platform, and 100% open source.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/SoCloseSociety/MiloAgent" target="_blank" class="btn btn-primary">
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                Star on GitHub
+            </a>
+            <a href="/login" class="btn btn-ghost">
+                Admin Dashboard
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section" id="features">
+        <h2 class="section-title">What Milo Does</h2>
+        <p class="section-subtitle">A full growth engine that runs autonomously 24/7</p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <span class="feature-icon">&#x1F50D;</span>
+                <h3>Reddit Expert</h3>
+                <p>Scans subreddits, finds relevant conversations, and writes human-like comments that add genuine value while naturally promoting your product.</p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">&#x1F9E0;</span>
+                <h3>Self-Learning</h3>
+                <p>A/B tests its own prompts, evolves strategies, and optimizes keyword weights based on real engagement data. Gets smarter every cycle.</p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">&#x1F310;</span>
+                <h3>Multi-Platform</h3>
+                <p>Operates across Reddit, Twitter/X, and Telegram simultaneously. Manages conversations, relationships, and community presence on each platform.</p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">&#x1F4B0;</span>
+                <h3>Zero Cost LLMs</h3>
+                <p>Runs on free-tier LLMs: Groq (Llama 3.3 70B), Google Gemini (2.0 Flash), and local Ollama models. No API bills, no subscriptions.</p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">&#x1F3D8;&#xFE0F;</span>
+                <h3>Community Builder</h3>
+                <p>Creates and moderates your own subreddits. Automated setup, rules, flairs, AutoModerator, and weekly content scheduling.</p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">&#x1F6E1;&#xFE0F;</span>
+                <h3>Safety First</h3>
+                <p>Rate limiting, ban detection, circuit breakers, account rotation, and smart cooldowns. Designed to stay under Reddit's radar.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="section" id="how-it-works">
+        <h2 class="section-title">How Milo Works</h2>
+        <p class="section-subtitle">A continuous cycle of scanning, thinking, writing, and learning</p>
+
+        <div class="flow">
+            <div class="flow-step">SCAN</div>
+            <span class="flow-arrow">&rarr;</span>
+            <div class="flow-step">SCORE</div>
+            <span class="flow-arrow">&rarr;</span>
+            <div class="flow-step">THINK</div>
+            <span class="flow-arrow">&rarr;</span>
+            <div class="flow-step">WRITE</div>
+            <span class="flow-arrow">&rarr;</span>
+            <div class="flow-step">CHECK</div>
+            <span class="flow-arrow">&rarr;</span>
+            <div class="flow-step">POST</div>
+            <span class="flow-arrow">&rarr;</span>
+            <div class="flow-step">LEARN</div>
+        </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="section">
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">24/7</div>
+                <div class="stat-label">Autonomous Operation</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">3</div>
+                <div class="stat-label">LLM Providers</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">3+</div>
+                <div class="stat-label">Platforms</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">$0</div>
+                <div class="stat-label">API Cost</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tech Stack -->
+    <section class="section">
+        <h2 class="section-title">Tech Stack</h2>
+        <p class="section-subtitle">Built with production-grade tools</p>
+
+        <div class="tech-badges">
+            <span class="tech-badge">Python</span>
+            <span class="tech-badge">FastAPI</span>
+            <span class="tech-badge">SQLite WAL</span>
+            <span class="tech-badge">APScheduler</span>
+            <span class="tech-badge">Groq</span>
+            <span class="tech-badge">Gemini</span>
+            <span class="tech-badge">Ollama</span>
+            <span class="tech-badge">Telegram Bot</span>
+            <span class="tech-badge">WebSocket</span>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="https://github.com/SoCloseSociety/MiloAgent" target="_blank">GitHub</a>
+            <a href="https://github.com/SoCloseSociety/MiloAgent/issues" target="_blank">Contribute</a>
+            <a href="https://github.com/SoCloseSociety/MiloAgent#readme" target="_blank">Documentation</a>
+            <a href="/login">Admin</a>
+        </div>
+        <p class="footer-text">
+            Open source under <a href="https://opensource.org/licenses/MIT" target="_blank">MIT License</a>.
+            Built by <a href="https://github.com/SoCloseSociety" target="_blank">SoCloseSociety</a>.
+        </p>
+    </footer>
+
+</div>
+
+</body>
+</html>

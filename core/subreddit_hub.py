@@ -476,6 +476,19 @@ Rules:
 
     # ── Main Cycle ──────────────────────────────────────────────────
 
+    def mark_setup_complete(self, subreddit: str) -> bool:
+        """Force-mark a hub as setup-complete (for manual override or migration)."""
+        try:
+            self.db._execute_write(
+                "UPDATE subreddit_hubs SET setup_complete = 1 WHERE subreddit = ?",
+                (subreddit,),
+            )
+            logger.info(f"Marked r/{subreddit} as setup-complete")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to mark r/{subreddit} setup-complete: {e}")
+            return False
+
     def run_hub_cycle(self, project: Dict, reddit_bot) -> Dict:
         """Run a hub animation cycle for a project.
 
@@ -483,12 +496,29 @@ Rules:
         """
         proj_name = project.get("project", {}).get("name", "")
         hubs = self.get_hubs(proj_name)
-        # Only animate hubs that have completed setup
+
+        # Primary: hubs with setup_complete=1
+        # Fallback: hubs that exist for >24h (setup may have partially succeeded)
         ready_hubs = [h for h in hubs if h.get("setup_complete")]
+        if not ready_hubs:
+            now = datetime.utcnow()
+            for h in hubs:
+                try:
+                    created = datetime.fromisoformat(h.get("created_at", ""))
+                    if (now - created) > timedelta(hours=24):
+                        ready_hubs.append(h)
+                except (ValueError, TypeError):
+                    pass
+            if ready_hubs:
+                logger.info(
+                    f"Hub animation: using {len(ready_hubs)} fallback hubs for {proj_name} "
+                    f"(>24h old, setup not fully complete)"
+                )
+
         stats = {"posts_created": 0, "hubs_active": len(ready_hubs)}
 
         if not ready_hubs and hubs:
-            logger.debug(f"Hub animation: {len(hubs)} hubs for {proj_name} but none setup-complete yet")
+            logger.debug(f"Hub animation: {len(hubs)} hubs for {proj_name} but none ready yet")
 
         for hub in ready_hubs:
             try:

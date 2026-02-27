@@ -12,3 +12,4 @@ playwright>=1.40
 rich>=13.0
 fastapi>=0.110
 uvicorn[standard]>=0.27
+passlib[bcrypt]>=1.7

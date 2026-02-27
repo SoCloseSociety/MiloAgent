@@ -63,9 +63,13 @@ class RedditWebBot(BasePlatform):
             "cookies_file", f"data/cookies/reddit_{self._username}.json"
         )
 
-        # Session for authenticated requests
+        # Session for authenticated requests (with connection pooling)
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": _random_ua()})
+        from requests.adapters import HTTPAdapter
+        _adapter = HTTPAdapter(pool_connections=10, pool_maxsize=10)
+        self.session.mount("https://", _adapter)
+        self.session.mount("http://", _adapter)
         self._authenticated = False
         self._modhash = ""
 
@@ -1462,10 +1466,11 @@ class RedditWebBot(BasePlatform):
 
     # ── Moderation & Admin ──────────────────────────────────────────
 
-    def _get_subreddit_fullname(self, subreddit: str) -> Optional[str]:
+    def _get_subreddit_fullname(self, subreddit: str, retries: int = 3) -> Optional[str]:
         """Get the t5_ fullname for a subreddit (needed by /api/friend, /api/site_admin).
 
         Caches results to avoid repeated lookups.
+        Retries with backoff for newly created subreddits that aren't indexed yet.
         """
         if not hasattr(self, "_sr_fullnames"):
             self._sr_fullnames: Dict[str, str] = {}
@@ -1474,21 +1479,37 @@ class RedditWebBot(BasePlatform):
         if key in self._sr_fullnames:
             return self._sr_fullnames[key]
 
-        try:
-            resp = self.session.get(
-                f"{REDDIT_BASE}/r/{subreddit}/about.json",
-                headers={"User-Agent": _random_ua(), "Accept": "application/json"},
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                data = resp.json().get("data", {})
-                fullname = data.get("name", "")  # e.g. "t5_2qh33"
-                if fullname:
-                    self._sr_fullnames[key] = fullname
-                    return fullname
-            logger.debug(f"Could not get fullname for r/{subreddit}: {resp.status_code}")
-        except Exception as e:
-            logger.debug(f"Fullname lookup failed for r/{subreddit}: {e}")
+        delays = [5, 15, 30]  # Backoff delays between retries
+        for attempt in range(retries):
+            try:
+                resp = self.session.get(
+                    f"{REDDIT_BASE}/r/{subreddit}/about.json",
+                    headers={"User-Agent": _random_ua(), "Accept": "application/json"},
+                    timeout=15,
+                )
+                if resp.status_code == 200:
+                    data = resp.json().get("data", {})
+                    fullname = data.get("name", "")  # e.g. "t5_2qh33"
+                    if fullname:
+                        self._sr_fullnames[key] = fullname
+                        return fullname
+                logger.debug(
+                    f"Fullname lookup for r/{subreddit}: HTTP {resp.status_code} "
+                    f"(attempt {attempt + 1}/{retries})"
+                )
+            except Exception as e:
+                logger.debug(
+                    f"Fullname lookup failed for r/{subreddit}: {e} "
+                    f"(attempt {attempt + 1}/{retries})"
+                )
+
+            # Wait before retrying (skip delay on last attempt)
+            if attempt < retries - 1:
+                delay = delays[min(attempt, len(delays) - 1)]
+                logger.debug(f"Retrying fullname lookup for r/{subreddit} in {delay}s...")
+                time.sleep(delay)
+
+        logger.warning(f"Could not get fullname for r/{subreddit} after {retries} attempts")
         return None
 
     def get_subreddit_about(self, subreddit: str) -> Optional[Dict]:

@@ -152,10 +152,15 @@ class CommunityManager:
 
         Runs the complete pipeline: settings → rules → flairs → automod → stickies.
         Skips already-completed steps (idempotent).
+
+        Setup is considered complete when at least the core steps succeed (rules, flairs,
+        welcome_post). Settings and automod can be retried next cycle without blocking
+        hub animation.
         """
         proj_name = project.get("project", {}).get("name", "unknown")
         status = self.get_setup_status(subreddit)
-        logger.info(f"Setting up r/{subreddit} for {proj_name} (done: {list(status.keys())})")
+        completed_steps = [k for k, v in status.items() if v == "completed"]
+        logger.info(f"Setting up r/{subreddit} for {proj_name} (completed: {completed_steps})")
 
         # Generate config via LLM
         config = self._generate_subreddit_config(subreddit, project)
@@ -166,9 +171,14 @@ class CommunityManager:
         success_count = 0
 
         # Step 1: Update settings (sidebar, description)
+        # Non-blocking: if this fails, we continue with other steps
         if status.get("settings") != "completed":
             if self._apply_settings(reddit_bot, subreddit, config, proj_name):
                 success_count += 1
+            else:
+                logger.warning(
+                    f"r/{subreddit}: settings failed (will retry next cycle) — continuing setup"
+                )
             time.sleep(random.uniform(3, 8))
 
         # Step 2: Create rules
@@ -184,9 +194,14 @@ class CommunityManager:
             time.sleep(random.uniform(3, 8))
 
         # Step 4: Configure AutoModerator
+        # Non-blocking: automod failure shouldn't prevent hub animation
         if status.get("automod") != "completed":
             if self._apply_automod(reddit_bot, subreddit, config, project, proj_name):
                 success_count += 1
+            else:
+                logger.warning(
+                    f"r/{subreddit}: automod failed (will retry next cycle) — continuing setup"
+                )
             time.sleep(random.uniform(3, 8))
 
         # Step 5: Create and pin welcome post
@@ -200,22 +215,46 @@ class CommunityManager:
             if self._create_rules_post(reddit_bot, subreddit, config, project, proj_name):
                 success_count += 1
 
-        # Mark overall setup complete
-        all_done = all(
-            self.get_setup_status(subreddit).get(s) == "completed"
-            for s in ("settings", "rules", "flairs", "automod", "welcome_post", "rules_post")
-        )
-        if all_done:
-            try:
-                self.db._execute_write(
-                    "UPDATE subreddit_hubs SET setup_complete = 1 WHERE subreddit = ?",
-                    (subreddit,),
-                )
-            except Exception:
-                pass
-            logger.info(f"r/{subreddit} setup complete!")
+        # Re-check status after all steps
+        final_status = self.get_setup_status(subreddit)
 
-        return all_done
+        # Full setup = all 6 steps completed
+        all_steps = ("settings", "rules", "flairs", "automod", "welcome_post", "rules_post")
+        all_done = all(final_status.get(s) == "completed" for s in all_steps)
+
+        # Partial setup OK: core steps done (rules OR flairs + at least one post)
+        # This allows hub animation to start while settings/automod are retried
+        core_steps = ("rules", "flairs", "welcome_post")
+        core_done = sum(1 for s in core_steps if final_status.get(s) == "completed") >= 2
+
+        if all_done:
+            self._mark_hub_setup_complete(subreddit)
+            logger.info(f"r/{subreddit} setup complete! (all 6 steps)")
+        elif core_done:
+            self._mark_hub_setup_complete(subreddit)
+            pending = [s for s in all_steps if final_status.get(s) != "completed"]
+            logger.info(
+                f"r/{subreddit} setup partially complete (core steps done). "
+                f"Pending: {pending} — will retry next cycle"
+            )
+        else:
+            completed = [s for s in all_steps if final_status.get(s) == "completed"]
+            logger.warning(
+                f"r/{subreddit} setup incomplete: {len(completed)}/6 steps done. "
+                f"Completed: {completed}"
+            )
+
+        return all_done or core_done
+
+    def _mark_hub_setup_complete(self, subreddit: str):
+        """Mark a hub as setup-complete in the database."""
+        try:
+            self.db._execute_write(
+                "UPDATE subreddit_hubs SET setup_complete = 1 WHERE subreddit = ?",
+                (subreddit,),
+            )
+        except Exception as e:
+            logger.error(f"Failed to mark r/{subreddit} setup_complete: {e}")
 
     def _generate_subreddit_config(self, subreddit: str, project: Dict) -> Optional[Dict]:
         """Use LLM to generate appropriate settings for a new subreddit."""
@@ -392,7 +431,13 @@ Guidelines:
             self._mark_step(subreddit, proj_name, "settings", "completed", sidebar[:200])
             logger.info(f"r/{subreddit}: settings applied")
         else:
-            self._mark_step(subreddit, proj_name, "settings", "failed")
+            # Mark as "retry" not "failed" — will try again next cycle
+            self._mark_step(subreddit, proj_name, "settings", "retry",
+                            "fullname lookup or API call failed — will retry")
+            logger.warning(
+                f"r/{subreddit}: settings failed (likely fullname not indexed yet) — "
+                f"will retry next cycle"
+            )
         return success
 
     def _apply_rules(self, reddit_bot, subreddit: str, config: Dict,
@@ -760,12 +805,13 @@ Reply with exactly one word: APPROVE, REMOVE, or IGNORE."""
         if not sticky_url:
             return True  # No sticky = needs one
 
-        last_checked = hub.get("mod_queue_last_checked")
-        if not last_checked:
+        # Use last_post_at (when content was last posted to this hub)
+        last_post = hub.get("last_post_at")
+        if not last_post:
             return True
 
         try:
-            last_dt = datetime.fromisoformat(last_checked)
+            last_dt = datetime.fromisoformat(last_post)
             return (datetime.utcnow() - last_dt) > timedelta(days=refresh_days)
         except Exception:
             return True
