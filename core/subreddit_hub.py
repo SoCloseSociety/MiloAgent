@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 # Limits
 MAX_POSTS_PER_HUB_PER_DAY = 3
-MIN_ORGANIC_BEFORE_PROMO = 10
-HUB_POST_INTERVAL_HOURS = 8
+MIN_ORGANIC_BEFORE_PROMO = 5
+HUB_POST_INTERVAL_HOURS = 4
 
 
 class SubredditHubManager:

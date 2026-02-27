@@ -676,7 +676,7 @@ function renderCommunities(comms) {
   if(countEl) countEl.textContent = comms.length;
   const mrH = document.getElementById('mrHubs'); if(mrH) mrH.textContent = comms.length;
   const setup = comms.filter(c => c.setup_complete).length;
-  const active = comms.filter(c => c.post_count > 0).length;
+  const active = comms.filter(c => c.total_posts > 0).length;
 
   if(statsEl) statsEl.innerHTML = `
     <div class="stat-card purple"><div class="sv">${comms.length}</div><div class="sl">Total Hubs</div></div>
@@ -687,7 +687,7 @@ function renderCommunities(comms) {
   if(el) el.innerHTML = comms.map(c => {
     const setupPct = c.setup_complete ? 100 : Math.round(((c.rules_count>0?25:0) + (c.flair_count>0?25:0) + (c.automod_configured?25:0) + (c.sticky_post_1?25:0)));
     const typeColor = c.ownership_type==='created'?'var(--neon-green)':c.ownership_type==='claimed'?'var(--neon-cyan)':'var(--text3)';
-    return `<div class="community-card"><div class="comm-header"><span class="comm-name">r/${esc(c.subreddit||c.name)}</span><div style="display:flex;gap:8px;align-items:center"><span class="badge ${c.setup_complete?'on':'warning'}">${c.setup_complete?'Ready':'Setup '+setupPct+'%'}</span><span style="font-size:10px;color:${typeColor};text-transform:uppercase;font-family:var(--font-data)">${esc(c.ownership_type||'pending')}</span></div></div><div class="comm-stats"><span style="color:var(--text3)">${esc(c.project||'')}</span><span>Rules: ${c.rules_count||0}</span><span>Flairs: ${c.flair_count||0}</span><span>Posts: ${c.post_count||0}</span><span>Subs: ${c.subscribers||'?'}</span></div><div class="comm-setup-bar"><div class="fill" style="width:${setupPct}%"></div></div></div>`;
+    return `<div class="community-card"><div class="comm-header"><span class="comm-name">r/${esc(c.subreddit||c.name)}</span><div style="display:flex;gap:8px;align-items:center"><span class="badge ${c.setup_complete?'on':'warning'}">${c.setup_complete?'Ready':'Setup '+setupPct+'%'}</span><span style="font-size:10px;color:${typeColor};text-transform:uppercase;font-family:var(--font-data)">${esc(c.ownership_type||'pending')}</span></div></div><div class="comm-stats"><span style="color:var(--text3)">${esc(c.project||'')}</span><span>Rules: ${c.rules_count||0}</span><span>Flairs: ${c.flair_count||0}</span><span>Posts: ${c.total_posts||0}</span><span>Subs: ${c.subscribers||'?'}</span></div><div class="comm-setup-bar"><div class="fill" style="width:${setupPct}%"></div></div></div>`;
   }).join('');
 }
 

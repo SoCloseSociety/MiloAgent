@@ -467,8 +467,8 @@ class Orchestrator:
         )
         self.scheduler.add_job(
             self._animate_hubs_safe, "interval",
-            hours=8, id="hub_animation",
-            next_run_time=datetime.now() + timedelta(minutes=90),
+            hours=4, id="hub_animation",
+            next_run_time=datetime.now() + timedelta(minutes=45),
         )
         # Community management: setup, moderation, stickies (every 4h)
         self.scheduler.add_job(
@@ -2565,7 +2565,7 @@ class Orchestrator:
                 logger.error(f"Hub animation error: {e}")
 
     def _animate_hubs(self):
-        """Post content to owned subreddit hubs."""
+        """Post content to owned subreddit hubs (per-hub with correct account)."""
         if self._paused:
             return
         if not self.rate_limiter.is_active_hours():
@@ -2578,12 +2578,28 @@ class Orchestrator:
             proj_name = project.get("project", {}).get("name", "unknown")
             hubs = self.hub_manager.get_hubs(proj_name)
 
-            for hub in hubs:
-                # Use the assigned account for this hub (same logic as _manage_communities)
+            # Filter to ready hubs (setup_complete or >24h old)
+            now = datetime.utcnow()
+            ready_hubs = [h for h in hubs if h.get("setup_complete")]
+            if not ready_hubs:
+                for h in hubs:
+                    try:
+                        created = datetime.fromisoformat(h.get("created_at", ""))
+                        if (now - created) > timedelta(hours=24):
+                            ready_hubs.append(h)
+                    except (ValueError, TypeError):
+                        pass
+
+            for hub in ready_hubs:
+                # Use the assigned account for THIS specific hub
                 assigned_username = hub.get("account", "")
                 if assigned_username:
                     account = self.account_mgr.get_account_by_username("reddit", assigned_username)
                     if not account:
+                        logger.warning(
+                            f"Hub r/{hub['subreddit']}: assigned account @{assigned_username} "
+                            f"unavailable — using round-robin"
+                        )
                         account = self.account_mgr.get_next_account("reddit")
                 else:
                     account = self.account_mgr.get_next_account("reddit")
@@ -2592,18 +2608,18 @@ class Orchestrator:
 
                 try:
                     bot = self._get_reddit_bot(account)
-                    stats = self.hub_manager.run_hub_cycle(project, bot)
-                    total_posts += stats.get("posts_created", 0)
-                    break  # run_hub_cycle handles all hubs for this project
+                    url = self.hub_manager.post_to_hub(bot, hub, project)
+                    if url:
+                        total_posts += 1
+                        time.sleep(random.uniform(30, 90))
                 except Exception as e:
-                    logger.error(f"Hub animation failed for {proj_name}: {e}")
-                    break
+                    logger.error(f"Hub animation failed for r/{hub['subreddit']}: {e}")
 
         if total_posts:
             self._send_telegram_alert(
                 f"Hub animation: posted {total_posts} piece(s) to owned subreddits"
             )
-            logger.info(f"Hub animation: {total_posts} posts created")
+        logger.info(f"Hub animation complete: {total_posts} posts created across all projects")
 
     # ── Community Management ─────────────────────────────────────────
 
