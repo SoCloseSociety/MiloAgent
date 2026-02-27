@@ -133,7 +133,6 @@ class ContentCurator:
             logger.warning("yt-dlp search timed out")
             return []
         except FileNotFoundError:
-            global _ytdlp_available
             if _ytdlp_available is not False:
                 logger.warning("yt-dlp not installed — YouTube search disabled")
                 _ytdlp_available = False
