@@ -16,6 +16,7 @@
   <img src="https://img.shields.io/badge/reddit-expert-FF4500?style=flat-square&logo=reddit&logoColor=white" alt="Reddit Expert"/>
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License"/>
   <img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Ready"/>
+  <a href="https://nothumansearch.ai/site/xquik.com"><img src="https://nothumansearch.ai/badge/xquik.com.svg" alt="NHS Agentic Readiness Score" height="20"></a>
 </p>
 
 ---
@@ -164,6 +165,19 @@ All projects scan concurrently using a thread pool. 8 projects complete in ~3 mi
 | Content validation | Pre-post check for spam, duplicates, banned phrases |
 | Karma gate | Blocks accounts with negative karma from writing |
 | CAPTCHA detection | Cross-account cooling when CAPTCHAs detected |
+
+### Optional X/Twitter Source Context
+
+When Twitter/X is enabled, treat source context as evidence, not final copy. A
+useful source packet includes matched tweets, replies, author metadata, follower
+counts, media URLs, and why each item matched the project rules. Feed only
+approved summaries into MiloAgent prompts, then let MiloAgent score, draft,
+validate, schedule, publish, and analyze with its own account controls.
+
+For teams using OpenClaw, [TweetClaw](https://github.com/Xquik-dev/tweetclaw)
+can supply that packet with `openclaw plugins install npm:@xquik/tweetclaw`.
+Keep post, reply, DM, like, follow, scheduling, and analytics actions inside
+MiloAgent unless you explicitly route them elsewhere.
 
 ### Zero-Cost LLM Stack
 
